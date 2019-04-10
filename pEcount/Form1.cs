@@ -1187,7 +1187,207 @@ End_VersionCommand:
 
     public void DoPrintCommands()
     {
+      //string stringfunction = "DoPrintCommand";
 
+      bool boolcomportopen = false;
+
+      byte[] bytestosend;
+      byte[] bytespcmtosend;
+
+      int inthundredths = 0;
+      int intthousandths = 0;
+
+      int intpcmcommanddelay = 5;               //milliseconds
+      int intmaxcommandtimeoutTenths = 0;       //HUNDREDTHS of seconds
+      int inttargetresponsecharcount = 0;
+      int intmaxretries = 0;
+      int intretrycount = 0;
+      int intretrytimeoutmilliseconds = 0;      //milliseconds
+
+      string stringout = "";
+
+      try {
+        //1. com port
+        //2. pcm command
+        //3. send command
+        //4. get response
+        //5. parse response
+        //6. close pcm
+
+        LineOut("*** SET E:COUNT END DELIVERY (N) ***");
+
+        LineOut("USING SERIAL PORT COM" + intcurrentcomport);
+        if (!IsCOMPortValid(intcurrentcomport)) {
+          stringout = "INVALID COM PORT! CHECK DEVICE MANAGER";
+          LineOut(stringout);
+          System.Windows.Forms.MessageBox.Show(stringout);
+          goto End_PrintCommand;
+        }
+
+        //setup com port and open it
+        if (boolcomportopen) {
+          //if the port is open, close it (possibly due to an error)
+          LineOut("COM PORT ALREADY OPEN, CLOSING");
+          CloseSerialPort(serialPort1);
+          boolcomportopen = false;
+        }
+        LineOut("INITIALIZING COM PORT");
+        boolcomportopen = OpenSerialPort(serialPort1);
+        if (!boolcomportopen) {
+          LineOut("ERROR INITIALIZING COM PORT!");
+          goto End_PrintCommand;
+        }
+
+
+        ////Command Sequence:
+        //Parameters:
+        //Number of copies = A single ASCII character from 0 - 9.
+        //• Used only for Printer Type = THERMAL(but still required)
+        //• 0 = Use Register default copies
+        //• 1 - 9 = Perform a partial cut after each copy until the
+        //final copy and then perform a full cut
+        //• Ignored(still required) if Printer Type is not THERMAL.
+
+        //Command Sequence:
+        //TX: 0x1F 0x02 (Connect PCM-Host to PCM-EC1)
+        //TX: X
+        //RX: X(Verify X is echoed)
+        //TX: 1 (ASCII byte 0-9 = # Copies)
+        //RX: byte … | (Verify response byte + pipe char)
+        //TX: 0xFF (Disconnect PCM)
+
+        string stringtosend = "X0";  //print default # copies
+
+        //build pcm and command arrays to connect HOST to REGISTER1 (0x1F 0x02) and then send V (0x56)
+        LineOut("BUILDING COMMAND BYTEARRAYS");
+        bytespcmtosend = StringToByteArray(Chr(31) + Chr(2));  //chr(31) = HEX 0x1F, chr(2) = HEX 0x02 
+        bytestosend = StringToByteArray(stringtosend);            // Built above
+
+        //set parameters for comamnd
+        LineOut("INITIALIZING COMMAND CONTROL PARAMETERS");
+        intmaxcommandtimeoutTenths = 1000;   //10 sec = tenths = N * 10ms max to wait, this will vary from command to command
+        inttargetresponsecharcount = 3;      //E + response + |, this will vary from command to command
+        intmaxretries = 0;                   //E cmd should not be re-sent if no response (only J should be resent if no response)
+        intretrycount = 0;
+        intretrytimeoutmilliseconds = 0;     //delay between retries in ms, J command is only cmd retry that is valid, J requires *min* of 250 ms between retries
+
+        //Retry_EndCommand:
+
+        //clear RX buffer before sending
+        LineOut("CLEARING COM PORT BUFFER");
+        bacomportbuffer = new byte[] { };
+
+        //send pcm command bytes
+        LineOut("SENDING PCM CONNECT HOST-TO-REG1 COMMAND: ");
+        LineOutHexAndASCII(ByteArrayToString(bytespcmtosend));
+        serialPort1.Write(bytespcmtosend, 0, bytespcmtosend.GetUpperBound(0) + 1);
+
+        //wait X ms for PCM hardware to complete port switching
+        LineOut("WAITING FOR PCM TO SWITCH PORTS ..");
+        intthousandths = 0;
+        while (intthousandths < intpcmcommanddelay) {
+          //this is a kludge
+          intthousandths++;
+          System.Windows.Forms.Application.DoEvents();
+          System.Threading.Thread.Sleep(1);  //1 = 1ms
+        }
+
+        //send command bytes
+        LineOut("SENDING E:COUNT COMMAND: ");
+        LineOutHexAndASCII(ByteArrayToString(bytestosend));
+        serialPort1.Write(bytestosend, 0, bytestosend.GetUpperBound(0) + 1);
+
+        //wait for response
+        inthundredths = 0;
+        while ((inthundredths < intmaxcommandtimeoutTenths) && (bacomportbuffer.Length < inttargetresponsecharcount)) {
+          inthundredths++;
+          System.Windows.Forms.Application.DoEvents();
+          System.Threading.Thread.Sleep(10);  //10 = 10ms, 10ms is one-hundredth of a second ..
+          System.Windows.Forms.Application.DoEvents();
+        }
+
+        if (bacomportbuffer.Length < inttargetresponsecharcount) {
+          LineOut("RESPONSE TIMEOUT EXCEEDED " + intmaxcommandtimeoutTenths + " TENTHS OF A SECOND");
+          if (intretrycount < intmaxretries) {
+            intretrycount++;
+            System.Threading.Thread.Sleep(intretrytimeoutmilliseconds);
+            LineOut("RETRY # " + intretrycount + " OF " + intmaxretries + ", TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+            LineOut("PLEASE WAIT ..");
+            //goto Retry_ResetCommand;
+          }
+          else {
+            if (intmaxretries == 0) {
+              LineOut("INVALID RESPONSE, TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+              LineOutHexAndASCII(ByteArrayToString(bacomportbuffer));
+            }
+            else {
+              LineOut("MAX OF " + intmaxretries + " RETRIES REACHED, TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+            }
+          }
+        }
+        else {
+          LineOut("TX TO E:COUNT: " + stringtosend.Length + " BYTES: " + stringtosend);
+
+          string stringresponse = ByteArrayToString(bacomportbuffer);
+          LineOut("RX FROM E:COUNT: " + stringresponse.Length + " BYTES");
+          LineOutHexAndASCII(stringresponse);
+
+          //NOTE, C# ARRAY INDICES ARE 0-BASED
+          LineOut("COMMAND ECHO               (0,1)  ....: " + stringresponse.Substring(0, 1));
+          LineOut("TICKET PRINT STATUS        (1,1)  ....: " + stringresponse.Substring(1, 1));
+          LineOut("TERMINATING PIPE CHARACTER (2,1)  ....: " + stringresponse.Substring(2, 1));
+
+          //Versions E142E and newer:
+          // X0 | printer error or printer is out of paper
+          // X1 | delivery printed
+          // X2 | X command invalid during Pump&Print delivery
+          // X3 | no parameter was received
+          // X4 | printing suppressed by ‘i’ command
+
+        switch (stringresponse.Substring(1, 1)) {
+            case "0":
+              LineOut("Response 0: printer error or printer is out of paper");
+              break;
+            case "1":
+              LineOut("Response 1: delivery printed");
+              break;
+            case "2":
+              LineOut("Response 2: X command invalid during Pump+Print delivery");
+              break;
+            case "3":
+              LineOut("Response 3: no parameter was received");
+              break;
+            case "4":
+              LineOut("Response 4: printing suppressed by ‘i’ command");
+              break;
+          }
+
+        }
+
+        //build pcm command arrays to disconnect HOST
+        bytespcmtosend = StringToByteArray(Chr(255));
+
+        //send pcm command bytes
+        LineOut("SENDING PCM DISCONNECT COMMAND: ");
+        LineOutHexAndASCII(ByteArrayToString(bytespcmtosend));
+        serialPort1.Write(bytespcmtosend, 0, bytespcmtosend.GetUpperBound(0) + 1);
+
+
+      }
+      catch (Exception e1) {
+        LineOut("EXCEPTION IN DoPrintCommand()", e1);
+      }
+
+
+      End_PrintCommand:
+
+      LineOut("PROCESSING COMPLETE");
+      if (boolcomportopen) {
+        LineOut("CLOSING COM PORT");
+        CloseSerialPort(serialPort1);
+        boolcomportopen = false;
+      }
+      LineOut("============================");
     }//end- DoPrintCommand()
 
     public void DoStatusCommand()
