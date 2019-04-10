@@ -17,7 +17,7 @@ namespace pEcount
 
     byte[] bacomportbuffer = new byte[] { };
     //change this to use a COM port other than COM1
-    int intcurrentcomport = 1;
+    int intcurrentcomport = 5;
 
     public Form1()
     {
@@ -1546,9 +1546,21 @@ End_DoPassThroughPrintCommand:
       EnableControls(true);
     }
 
-
-
-
-
+    private void button4_Click(object sender, EventArgs e)
+    {
+      int intserialportcount = 0;
+      LineOut("CURRENT COM PORT: " + intcurrentcomport);
+      LineOut("VALID COM PORTS:");
+      foreach (string stringtemplabel in System.IO.Ports.SerialPort.GetPortNames()) {
+        string sel = "";
+        if (stringtemplabel.CompareTo("COM" + intcurrentcomport.ToString()) == 0) {
+          sel = " **";
+        }
+        intserialportcount++;
+        LineOut(" " + stringtemplabel + sel);
+      }
+      LineOut(" " + intserialportcount + " COM Ports found.");
+      LineOut("============================");
+    }
   }
 }
