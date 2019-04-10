@@ -25,7 +25,6 @@ namespace pEcount
       listBox1.Items.Clear();
     }
 
-
     public delegate void DataCOMAcquired(object sender);
     private void serialPort1_DataReceived(object sender, System.IO.Ports.SerialDataReceivedEventArgs e)
     {
@@ -58,8 +57,6 @@ namespace pEcount
         //LineOut("serialPort1_DataReceived()::Error Reading Port.InputBuffer", e1);
       }
     }
-
-
 
     public void AddToList(string stringout)
     {
@@ -111,18 +108,27 @@ namespace pEcount
     {
       string sOutA = "  ASC: ";
       string sOutH = "  HEX: ";
+      string sOutT = "     : ";
+      //string strbinary = stringMessage.Replace("\0", "<NULL>").Replace("\r", "<CR>").Replace("\n", "<LF>");
+      bool boolbinaryfound = false;
 
       foreach (char c in stringMessage)
       {
+        int val = (int)c;
+        char chr = '*';
+        if(val>=32 && val<=127) {
+          chr = c;
+        }
         int tmp = c;
         sOutA += tmp.ToString("  000") + " ";
         sOutH += "0x" + String.Format("{0:x3}", System.Convert.ToUInt32(tmp.ToString())).ToUpper() + " ";
+        sOutT += chr;
       }
       LineOut(sOutA);
       LineOut(sOutH);
-      LineOut("  " + stringMessage.Replace("\0", "<NULL>").Replace("\r", "<CR>").Replace("\n", "<LF>"));
+      LineOut(sOutT);
+      //LineOut("  " + strbinary);
     }
-
 
     private bool OpenSerialPort(System.IO.Ports.SerialPort sspport)
     {
@@ -195,9 +201,6 @@ namespace pEcount
       return boolfound;
     }
 
-
-
-
     public string Chr(int intchar)
     {
       int intlocal = intchar;
@@ -227,8 +230,6 @@ namespace pEcount
     {
       return (int)charin;
     }
-
-
 
     public string ByteArrayToString(byte[] byteArray)
     {
@@ -301,7 +302,6 @@ namespace pEcount
         return false;
       }
     }
-
     public static double ReturnValidDouble(string stringin)
     {
       if (stringin.Length <= 0)
@@ -330,8 +330,6 @@ namespace pEcount
         return 0;
       }
     }
-
-
 
     private void OutputStatusBits(int intbyte, string stringstatusbinary)
     {
@@ -439,9 +437,6 @@ namespace pEcount
       }
       return intreturn;
     }
-
-
-
 
     public void DoVersionCommand()
     {
@@ -635,6 +630,30 @@ End_VersionCommand:
 
     }//end- DoVersionCommand()
 
+    public void DoPresetCommand()
+    {
+
+    }//end- DoPresetCommand()
+
+    public void DoResetCommand()
+    {
+
+    }//end- DoPresetCommand()
+
+    public void DoMonitorCommand()
+    {
+
+    }//end- DoPresetCommand()
+
+    public void DoToggleValvesCommand()
+    {
+
+    }//end- DoPresetCommand()
+
+    public void DoEndAndPrintCommands()
+    {
+
+    }//end- DoPresetCommand()
 
 
     public void DoStatusCommand()
@@ -976,7 +995,6 @@ End_StatusCommand:
 
 
     }//end- DoStatusCommand()
-
 
 
     public void DoPassThroughPrintCommand()
@@ -1503,50 +1521,52 @@ End_DoPassThroughPrintCommand:
     }//end- DoPassThroughPrintCommand()
 
 
-
-
-
-
     private void EnableControls(bool boolenabled)
     {
-      button1.Enabled = boolenabled;
-      button2.Enabled = boolenabled;
-      button3.Enabled = boolenabled;
+      btnGetVersion.Enabled = boolenabled;
+      btnGetStatus.Enabled = boolenabled;
+      btnPassThroughPrint.Enabled = boolenabled;
+      btnListCOMPorts.Enabled = boolenabled;
+      btnSetPreset.Enabled = boolenabled;
+      txtPreset.Enabled = boolenabled;
+      btnReset.Enabled = boolenabled;
+      btnMonitor.Enabled = boolenabled;
+      btnToggleValves.Enabled = boolenabled;
+      btnEndAndPrint.Enabled = boolenabled;
     }
 
     private void Form1_FormClosing(object sender, FormClosingEventArgs e)
     {
       //could check any, button1 is as good as any
-      if (!button1.Enabled) 
+      if (!btnGetVersion.Enabled) 
       {
         //the control is not enabled, cancel the form unload since the app is busy
         e.Cancel = true;
       }
     }
 
-
-    private void button1_Click(object sender, EventArgs e)
+    private void btnGetVersion_Click(object sender, EventArgs e)
     {
       EnableControls(false);
       DoVersionCommand();
       EnableControls(true);
     }
 
-    private void button2_Click(object sender, EventArgs e)
+    private void btnGetStatus_Click(object sender, EventArgs e)
     {
       EnableControls(false);
       DoStatusCommand();
       EnableControls(true);
     }
 
-    private void button3_Click(object sender, EventArgs e)
+    private void btnPassThroughPrint_Click(object sender, EventArgs e)
     {
       EnableControls(false);
       DoPassThroughPrintCommand();
       EnableControls(true);
     }
 
-    private void button4_Click(object sender, EventArgs e)
+    private void btnListCOMPorts_Click(object sender, EventArgs e)
     {
       int intserialportcount = 0;
       LineOut("CURRENT COM PORT: " + intcurrentcomport);
@@ -1561,6 +1581,41 @@ End_DoPassThroughPrintCommand:
       }
       LineOut(" " + intserialportcount + " COM Ports found.");
       LineOut("============================");
+    }
+
+    private void btnSetPreset_Click(object sender, EventArgs e)
+    {
+      EnableControls(false);
+      DoPresetCommand();
+      EnableControls(true);
+    }
+
+    private void btnReset_Click(object sender, EventArgs e)
+    {
+      EnableControls(false);
+      DoResetCommand();
+      EnableControls(true);
+    }
+
+    private void btnMonitor_Click(object sender, EventArgs e)
+    {
+      EnableControls(false);
+      DoMonitorCommand();
+      EnableControls(true);
+    }
+
+    private void btnToggleValves_Click(object sender, EventArgs e)
+    {
+      EnableControls(false);
+      DoToggleValvesCommand();
+      EnableControls(true);
+    }
+
+    private void btnEndAndPrint_Click(object sender, EventArgs e)
+    {
+      EnableControls(false);
+      DoEndAndPrintCommands();
+      EnableControls(true);
     }
   }
 }
