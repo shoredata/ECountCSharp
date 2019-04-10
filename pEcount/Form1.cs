@@ -451,7 +451,7 @@ namespace pEcount
       int intthousandths = 0;
 
       int intpcmcommanddelay = 5;               //milliseconds
-      int intmaxcommandtimeouthundredths = 0;   //HUNDREDTHS of seconds
+      int intmaxcommandtimeoutTenths = 0;   //HUNDREDTHS of seconds
       int inttargetresponsecharcount = 0;
       int intmaxretries = 0;
       int intretrycount = 0;
@@ -514,7 +514,7 @@ namespace pEcount
 
         //set parameters for V comamnd
         LineOut("INITIALIZING COMMAND CONTROL PARAMETERS");
-        intmaxcommandtimeouthundredths = 10; //10 hundredths = 1000ms max to wait, this will vary from command to command
+        intmaxcommandtimeoutTenths = 10; //10 hundredths = 1000ms max to wait, this will vary from command to command
         inttargetresponsecharcount = 17;     //V + 15 data chars + |, this will vary from command to command
         intmaxretries = 0;                   //V cmd should not be re-sent if no response (only J should be resent if no response)
         intretrycount = 0;
@@ -550,7 +550,7 @@ Retry_VersionCommand:
 
         //wait for response
         inthundredths = 0;
-        while ((inthundredths < intmaxcommandtimeouthundredths) && (bacomportbuffer.Length < inttargetresponsecharcount))
+        while ((inthundredths < intmaxcommandtimeoutTenths) && (bacomportbuffer.Length < inttargetresponsecharcount))
         {
           inthundredths++;
           System.Windows.Forms.Application.DoEvents();
@@ -560,7 +560,7 @@ Retry_VersionCommand:
 
         if (bacomportbuffer.Length < inttargetresponsecharcount)
         {
-          LineOut("RESPONSE TIMEOUT EXCEEDED " + intmaxcommandtimeouthundredths + " HUNDREDTHS OF A SECOND");
+          LineOut("RESPONSE TIMEOUT EXCEEDED " + intmaxcommandtimeoutTenths + " TENTHS OF A SECOND");
           if (intretrycount < intmaxretries)
           {
             intretrycount++;
@@ -632,29 +632,563 @@ End_VersionCommand:
 
     public void DoPresetCommand()
     {
+      //string stringfunction = "DoPresetCommand";
+
+      bool boolcomportopen = false;
+
+      byte[] bytestosend;
+      byte[] bytespcmtosend;
+
+      int inthundredths = 0;
+      int intthousandths = 0;
+
+      int intpcmcommanddelay = 5;               //milliseconds
+      int intmaxcommandtimeoutTenths = 0;   //HUNDREDTHS of seconds
+      int inttargetresponsecharcount = 0;
+      int intmaxretries = 0;
+      int intretrycount = 0;
+      int intretrytimeoutmilliseconds = 0;      //milliseconds
+
+      string stringout = "";
+
+      try {
+        //1. com port
+        //2. pcm command
+        //3. send command
+        //4. get response
+        //5. parse response
+        //6. close pcm
+
+        LineOut("*** SET E:COUNT PRESET ***");
+
+        string strpreset = "A" + "01" + "000000" + "0" + "01";
+        if (txtPreset.Text.Length > 0) {
+          decimal dpreset = decimal.Parse(txtPreset.Text) * 10;
+          if (dpreset > 0.09m && dpreset < 1000000m) {
+            strpreset = dpreset.ToString("000000");
+            strpreset = "A" + "01" + strpreset + "1" + "01";
+            LineOut(" - THIS WILL BE A HOST MODE DELIVERY A PRESET VALUE OF " + txtPreset.Text);
+          }
+          else {
+            LineOut(" - THIS WILL BE A HOST MODE DELIVERY WITH NO PRESET VALUE");
+          }        
+        }
+        else {
+          LineOut("Option 1: To skip the preset and do a Host Mode delivery enter preset of 0.");
+          LineOut("Option 2: To do a pump + print delivery skip preset and reset the E:Count.");
+          goto End_PresetCommand;
+        }
+        //LineOut(strpreset);
+
+        // Note: By sending the "A" or the "E" command prior to the delivery it automatically puts the E:Count in host mode
+        //  which requires the X command be used after the delivery has ended in order to print the delivery ticket
+
+        LineOut("USING SERIAL PORT COM" + intcurrentcomport);
+        if (!IsCOMPortValid(intcurrentcomport)) {
+          stringout = "INVALID COM PORT! CHECK DEVICE MANAGER";
+          LineOut(stringout);
+          System.Windows.Forms.MessageBox.Show(stringout);
+          goto End_PresetCommand;
+        }
+
+        //setup com port and open it
+        if (boolcomportopen) {
+          //if the port is open, close it (possibly due to an error)
+          LineOut("COM PORT ALREADY OPEN, CLOSING");
+          CloseSerialPort(serialPort1);
+          boolcomportopen = false;
+        }
+        LineOut("INITIALIZING COM PORT");
+        boolcomportopen = OpenSerialPort(serialPort1);
+        if (!boolcomportopen) {
+          LineOut("ERROR INITIALIZING COM PORT!");
+          goto End_PresetCommand;
+        }
+
+        //build pcm and command arrays to connect HOST to REGISTER1 (0x1F 0x02) and then send V (0x56)
+        LineOut("BUILDING COMMAND BYTEARRAYS");
+        bytespcmtosend = StringToByteArray(Chr(31) + Chr(2));  //chr(31) = HEX 0x1F, chr(2) = HEX 0x02 
+        bytestosend = StringToByteArray(strpreset);            // Built above
+
+        //A command looks like this (from ECount Host Interface docs):
+        // response: A + response + | (Response=0:Invalid PC, Response=1:Valid PC)
+        // command = 11 bytes (10 bytes for E command):
+        //
+        // Product Code                     2 bytes   01 - 99                                      
+        // Preset Tenths, Implied Decimal   6 bytes   000000 - 999999
+        // Preset Enable                    1 byte    0 - 1(0 = OFF 1 = ON)
+        // Byte 10(Ignored)                 1 byte    0(Send ASCII 0)
+        // Byte 11(Ignored)                 1 byte    1(Send ASCII 1)
+
+        //set parameters for V comamnd
+        LineOut("INITIALIZING COMMAND CONTROL PARAMETERS");
+        intmaxcommandtimeoutTenths = 30; //hundredths = N * 100ms max to wait, this will vary from command to command
+        inttargetresponsecharcount = 3;      //E + response + |, this will vary from command to command
+        intmaxretries = 0;                   //E cmd should not be re-sent if no response (only J should be resent if no response)
+        intretrycount = 0;
+        intretrytimeoutmilliseconds = 0;     //delay between retries in ms, J command is only cmd retry that is valid, J requires *min* of 250 ms between retries
+
+      //Retry_PresetCommand:
+
+        //clear RX buffer before sending
+        LineOut("CLEARING COM PORT BUFFER");
+        bacomportbuffer = new byte[] { };
+
+        //send pcm command bytes
+        LineOut("SENDING PCM CONNECT HOST-TO-REG1 COMMAND: ");
+        LineOutHexAndASCII(ByteArrayToString(bytespcmtosend));
+        serialPort1.Write(bytespcmtosend, 0, bytespcmtosend.GetUpperBound(0) + 1);
+
+        //wait X ms for PCM hardware to complete port switching
+        LineOut("WAITING FOR PCM TO SWITCH PORTS ..");
+        intthousandths = 0;
+        while (intthousandths < intpcmcommanddelay) {
+          //this is a kludge
+          intthousandths++;
+          System.Windows.Forms.Application.DoEvents();
+          System.Threading.Thread.Sleep(1);  //1 = 1ms
+        }
+
+        //send command bytes
+        LineOut("SENDING E:COUNT COMMAND: ");
+        LineOutHexAndASCII(ByteArrayToString(bytestosend));
+        serialPort1.Write(bytestosend, 0, bytestosend.GetUpperBound(0) + 1);
+
+        //wait for response
+        inthundredths = 0;
+        while ((inthundredths < intmaxcommandtimeoutTenths) && (bacomportbuffer.Length < inttargetresponsecharcount)) {
+          inthundredths++;
+          System.Windows.Forms.Application.DoEvents();
+          System.Threading.Thread.Sleep(10);  //10 = 10ms, 10ms is one-hundredth of a second ..
+          System.Windows.Forms.Application.DoEvents();
+        }
+
+        if (bacomportbuffer.Length < inttargetresponsecharcount) {
+          LineOut("RESPONSE TIMEOUT EXCEEDED " + intmaxcommandtimeoutTenths + " TENTHS OF A SECOND");
+          if (intretrycount < intmaxretries) {
+            intretrycount++;
+            System.Threading.Thread.Sleep(intretrytimeoutmilliseconds);
+            LineOut("RETRY # " + intretrycount + " OF " + intmaxretries + ", TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+            LineOut("PLEASE WAIT ..");
+            //goto Retry_PresetCommand;
+          }
+          else {
+            if (intmaxretries == 0) {
+              LineOut("INVALID RESPONSE, TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+              LineOutHexAndASCII(ByteArrayToString(bacomportbuffer));
+            }
+            else {
+              LineOut("MAX OF " + intmaxretries + " RETRIES REACHED, TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+            }
+          }
+        }
+        else {
+          LineOut("TX TO E:COUNT: " + strpreset.Length + " BYTES: " + strpreset);
+          LineOut("COMMAND                    (0,1)  ....: " + strpreset.Substring(0, 1));
+          LineOut("PRODUCT CODE               (1,2)  ....: " + strpreset.Substring(1, 2));
+          LineOut("PRESET (TENTHS NO DECIMAL) (3,6)  ....: " + strpreset.Substring(2, 6));
+          LineOut("PRESET ENABLE (0,1)        (9,1)  ....: " + strpreset.Substring(8, 1));
+          LineOut("REQUIRED CHARS             (10,2)  ....: " + strpreset.Substring(9, 2));
+          LineOut("");
+
+          string stringresponse = ByteArrayToString(bacomportbuffer);
+          LineOut("RX FROM E:COUNT: " + stringresponse.Length + " BYTES");
+          LineOutHexAndASCII(stringresponse);
+
+          //NOTE, C# ARRAY INDICES ARE 0-BASED
+          LineOut("COMMAND ECHO               (0,1)  ....: " + stringresponse.Substring(0, 1));
+          LineOut("PRODUCT CODE STATUS        (1,1)  ....: " + stringresponse.Substring(1, 1));
+          LineOut("TERMINATING PIPE CHARACTER (2,1)  ....: " + stringresponse.Substring(2, 1));
+
+          if (stringresponse.Substring(1, 1).CompareTo("1")==0) {
+            LineOut("*** THE E:COUNT IS IN HOST MOST STATUS AND READY TO BE RESET TO BEGIN A DELVIERY ***");
+            LineOut("*** NOTE: THE ~DELIVERY~ LEGEND SHOULD BE VISIBLE ON THE E:COUNT ***");
+          }
+        }
+
+        //build pcm command arrays to disconnect HOST
+        bytespcmtosend = StringToByteArray(Chr(255));
+
+        //send pcm command bytes
+        LineOut("SENDING PCM DISCONNECT COMMAND: ");
+        LineOutHexAndASCII(ByteArrayToString(bytespcmtosend));
+        serialPort1.Write(bytespcmtosend, 0, bytespcmtosend.GetUpperBound(0) + 1);
+
+
+      }
+        catch (Exception e1)
+        {
+          LineOut("EXCEPTION IN DoPresetCommand()", e1);
+      }
+
+
+    End_PresetCommand:
+
+      LineOut("PROCESSING COMPLETE");
+      if (boolcomportopen)
+      {
+        LineOut("CLOSING COM PORT");
+        CloseSerialPort(serialPort1);
+        boolcomportopen = false;
+      }
+      LineOut("============================");
 
     }//end- DoPresetCommand()
+
+
 
     public void DoResetCommand()
     {
+      //string stringfunction = "DoResetCommand";
 
-    }//end- DoPresetCommand()
+      bool boolcomportopen = false;
+
+      byte[] bytestosend;
+      byte[] bytespcmtosend;
+
+      int inthundredths = 0;
+      int intthousandths = 0;
+
+      int intpcmcommanddelay = 5;               //milliseconds
+      int intmaxcommandtimeoutTenths = 0;   //HUNDREDTHS of seconds
+      int inttargetresponsecharcount = 0;
+      int intmaxretries = 0;
+      int intretrycount = 0;
+      int intretrytimeoutmilliseconds = 0;      //milliseconds
+
+      string stringout = "";
+
+      try {
+        //1. com port
+        //2. pcm command
+        //3. send command
+        //4. get response
+        //5. parse response
+        //6. close pcm
+
+        LineOut("*** SET E:COUNT RESET ***");
+
+        LineOut("USING SERIAL PORT COM" + intcurrentcomport);
+        if (!IsCOMPortValid(intcurrentcomport)) {
+          stringout = "INVALID COM PORT! CHECK DEVICE MANAGER";
+          LineOut(stringout);
+          System.Windows.Forms.MessageBox.Show(stringout);
+          goto End_ResetCommand;
+        }
+
+        //setup com port and open it
+        if (boolcomportopen) {
+          //if the port is open, close it (possibly due to an error)
+          LineOut("COM PORT ALREADY OPEN, CLOSING");
+          CloseSerialPort(serialPort1);
+          boolcomportopen = false;
+        }
+        LineOut("INITIALIZING COM PORT");
+        boolcomportopen = OpenSerialPort(serialPort1);
+        if (!boolcomportopen) {
+          LineOut("ERROR INITIALIZING COM PORT!");
+          goto End_ResetCommand;
+        }
+
+
+        //Command Sequence:
+        //TX: 0x1F 0x02(Connect PCM - Host to PCM - EC1)
+        //TX: R
+        //RX: R(Verify R is echoed)
+        //RX: | (Verify pipe char)
+        //TX: 0xFF(Disconnect PCM)
+        //N
+        string stringtosend = "R";
+
+        //build pcm and command arrays to connect HOST to REGISTER1 (0x1F 0x02) and then send V (0x56)
+        LineOut("BUILDING COMMAND BYTEARRAYS");
+        bytespcmtosend = StringToByteArray(Chr(31) + Chr(2));  //chr(31) = HEX 0x1F, chr(2) = HEX 0x02 
+        bytestosend = StringToByteArray(stringtosend);            // Built above
+
+        //set parameters for V comamnd
+        LineOut("INITIALIZING COMMAND CONTROL PARAMETERS");
+        intmaxcommandtimeoutTenths = 1000;//10 sec = tenths = N * 100ms max to wait, this will vary from command to command
+        inttargetresponsecharcount = 2;      //E + response + |, this will vary from command to command
+        intmaxretries = 0;                   //E cmd should not be re-sent if no response (only J should be resent if no response)
+        intretrycount = 0;
+        intretrytimeoutmilliseconds = 0;     //delay between retries in ms, J command is only cmd retry that is valid, J requires *min* of 250 ms between retries
+
+        //Retry_ResetCommand:
+
+        //clear RX buffer before sending
+        LineOut("CLEARING COM PORT BUFFER");
+        bacomportbuffer = new byte[] { };
+
+        //send pcm command bytes
+        LineOut("SENDING PCM CONNECT HOST-TO-REG1 COMMAND: ");
+        LineOutHexAndASCII(ByteArrayToString(bytespcmtosend));
+        serialPort1.Write(bytespcmtosend, 0, bytespcmtosend.GetUpperBound(0) + 1);
+
+        //wait X ms for PCM hardware to complete port switching
+        LineOut("WAITING FOR PCM TO SWITCH PORTS ..");
+        intthousandths = 0;
+        while (intthousandths < intpcmcommanddelay) {
+          //this is a kludge
+          intthousandths++;
+          System.Windows.Forms.Application.DoEvents();
+          System.Threading.Thread.Sleep(1);  //1 = 1ms
+        }
+
+        //send command bytes
+        LineOut("SENDING E:COUNT COMMAND: ");
+        LineOutHexAndASCII(ByteArrayToString(bytestosend));
+        serialPort1.Write(bytestosend, 0, bytestosend.GetUpperBound(0) + 1);
+
+        //wait for response
+        inthundredths = 0;
+        while ((inthundredths < intmaxcommandtimeoutTenths) && (bacomportbuffer.Length < inttargetresponsecharcount)) {
+          inthundredths++;
+          System.Windows.Forms.Application.DoEvents();
+          System.Threading.Thread.Sleep(10);  //10 = 10ms, 10ms is one-hundredth of a second ..
+          System.Windows.Forms.Application.DoEvents();
+        }
+
+        if (bacomportbuffer.Length < inttargetresponsecharcount) {
+          LineOut("RESPONSE TIMEOUT EXCEEDED " + intmaxcommandtimeoutTenths + " TENTHS OF A SECOND");
+          if (intretrycount < intmaxretries) {
+            intretrycount++;
+            System.Threading.Thread.Sleep(intretrytimeoutmilliseconds);
+            LineOut("RETRY # " + intretrycount + " OF " + intmaxretries + ", TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+            LineOut("PLEASE WAIT ..");
+            //goto Retry_ResetCommand;
+          }
+          else {
+            if (intmaxretries == 0) {
+              LineOut("INVALID RESPONSE, TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+              LineOutHexAndASCII(ByteArrayToString(bacomportbuffer));
+            }
+            else {
+              LineOut("MAX OF " + intmaxretries + " RETRIES REACHED, TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+            }
+          }
+        }
+        else {
+          LineOut("TX TO E:COUNT: " + stringtosend.Length + " BYTES: " + stringtosend);
+
+          string stringresponse = ByteArrayToString(bacomportbuffer);
+          LineOut("RX FROM E:COUNT: " + stringresponse.Length + " BYTES");
+          LineOutHexAndASCII(stringresponse);
+
+          //NOTE, C# ARRAY INDICES ARE 0-BASED
+          LineOut("COMMAND ECHO               (0,1)  ....: " + stringresponse.Substring(0, 1));
+          LineOut("TERMINATING PIPE CHARACTER (1,1)  ....: " + stringresponse.Substring(1, 1));
+
+        }
+
+        //build pcm command arrays to disconnect HOST
+        bytespcmtosend = StringToByteArray(Chr(255));
+
+        //send pcm command bytes
+        LineOut("SENDING PCM DISCONNECT COMMAND: ");
+        LineOutHexAndASCII(ByteArrayToString(bytespcmtosend));
+        serialPort1.Write(bytespcmtosend, 0, bytespcmtosend.GetUpperBound(0) + 1);
+
+
+      }
+      catch (Exception e1) {
+        LineOut("EXCEPTION IN DoResetCommand()", e1);
+      }
+
+
+      End_ResetCommand:
+
+      LineOut("PROCESSING COMPLETE");
+      if (boolcomportopen) {
+        LineOut("CLOSING COM PORT");
+        CloseSerialPort(serialPort1);
+        boolcomportopen = false;
+      }
+      LineOut("============================");
+    }//end- DoResetCommand()
 
     public void DoMonitorCommand()
     {
 
-    }//end- DoPresetCommand()
+    }//end- DoMonitorCommand()
 
     public void DoToggleValvesCommand()
     {
 
-    }//end- DoPresetCommand()
+    }//end- DoToggleValvesCommand()
 
-    public void DoEndAndPrintCommands()
+    public void DoEndCommands()
+    {
+      //string stringfunction = "DoEndCommand";
+
+      bool boolcomportopen = false;
+
+      byte[] bytestosend;
+      byte[] bytespcmtosend;
+
+      int inthundredths = 0;
+      int intthousandths = 0;
+
+      int intpcmcommanddelay = 5;               //milliseconds
+      int intmaxcommandtimeoutTenths = 0;       //HUNDREDTHS of seconds
+      int inttargetresponsecharcount = 0;
+      int intmaxretries = 0;
+      int intretrycount = 0;
+      int intretrytimeoutmilliseconds = 0;      //milliseconds
+
+      string stringout = "";
+
+      try {
+        //1. com port
+        //2. pcm command
+        //3. send command
+        //4. get response
+        //5. parse response
+        //6. close pcm
+
+        LineOut("*** SET E:COUNT END DELIVERY (N) ***");
+
+        LineOut("USING SERIAL PORT COM" + intcurrentcomport);
+        if (!IsCOMPortValid(intcurrentcomport)) {
+          stringout = "INVALID COM PORT! CHECK DEVICE MANAGER";
+          LineOut(stringout);
+          System.Windows.Forms.MessageBox.Show(stringout);
+          goto End_EndCommand;
+        }
+
+        //setup com port and open it
+        if (boolcomportopen) {
+          //if the port is open, close it (possibly due to an error)
+          LineOut("COM PORT ALREADY OPEN, CLOSING");
+          CloseSerialPort(serialPort1);
+          boolcomportopen = false;
+        }
+        LineOut("INITIALIZING COM PORT");
+        boolcomportopen = OpenSerialPort(serialPort1);
+        if (!boolcomportopen) {
+          LineOut("ERROR INITIALIZING COM PORT!");
+          goto End_EndCommand;
+        }
+
+
+        //Command Sequence:
+        //TX: 0x1F 0x02(Connect PCM - Host to PCM - EC1)
+        //TX: N
+        //RX: N(Verify N is echoed)
+        //RX: | (Verify pipe char)
+        //TX: 0xFF(Disconnect PCM)
+        //N
+        string stringtosend = "N";
+
+        //build pcm and command arrays to connect HOST to REGISTER1 (0x1F 0x02) and then send V (0x56)
+        LineOut("BUILDING COMMAND BYTEARRAYS");
+        bytespcmtosend = StringToByteArray(Chr(31) + Chr(2));  //chr(31) = HEX 0x1F, chr(2) = HEX 0x02 
+        bytestosend = StringToByteArray(stringtosend);            // Built above
+
+        //set parameters for comamnd
+        LineOut("INITIALIZING COMMAND CONTROL PARAMETERS");
+        intmaxcommandtimeoutTenths = 1000;   //10 sec = tenths = N * 10ms max to wait, this will vary from command to command
+        inttargetresponsecharcount = 2;      //E + response + |, this will vary from command to command
+        intmaxretries = 0;                   //E cmd should not be re-sent if no response (only J should be resent if no response)
+        intretrycount = 0;
+        intretrytimeoutmilliseconds = 0;     //delay between retries in ms, J command is only cmd retry that is valid, J requires *min* of 250 ms between retries
+
+        //Retry_EndCommand:
+
+        //clear RX buffer before sending
+        LineOut("CLEARING COM PORT BUFFER");
+        bacomportbuffer = new byte[] { };
+
+        //send pcm command bytes
+        LineOut("SENDING PCM CONNECT HOST-TO-REG1 COMMAND: ");
+        LineOutHexAndASCII(ByteArrayToString(bytespcmtosend));
+        serialPort1.Write(bytespcmtosend, 0, bytespcmtosend.GetUpperBound(0) + 1);
+
+        //wait X ms for PCM hardware to complete port switching
+        LineOut("WAITING FOR PCM TO SWITCH PORTS ..");
+        intthousandths = 0;
+        while (intthousandths < intpcmcommanddelay) {
+          //this is a kludge
+          intthousandths++;
+          System.Windows.Forms.Application.DoEvents();
+          System.Threading.Thread.Sleep(1);  //1 = 1ms
+        }
+
+        //send command bytes
+        LineOut("SENDING E:COUNT COMMAND: ");
+        LineOutHexAndASCII(ByteArrayToString(bytestosend));
+        serialPort1.Write(bytestosend, 0, bytestosend.GetUpperBound(0) + 1);
+
+        //wait for response
+        inthundredths = 0;
+        while ((inthundredths < intmaxcommandtimeoutTenths) && (bacomportbuffer.Length < inttargetresponsecharcount)) {
+          inthundredths++;
+          System.Windows.Forms.Application.DoEvents();
+          System.Threading.Thread.Sleep(10);  //10 = 10ms, 10ms is one-hundredth of a second ..
+          System.Windows.Forms.Application.DoEvents();
+        }
+
+        if (bacomportbuffer.Length < inttargetresponsecharcount) {
+          LineOut("RESPONSE TIMEOUT EXCEEDED " + intmaxcommandtimeoutTenths + " TENTHS OF A SECOND");
+          if (intretrycount < intmaxretries) {
+            intretrycount++;
+            System.Threading.Thread.Sleep(intretrytimeoutmilliseconds);
+            LineOut("RETRY # " + intretrycount + " OF " + intmaxretries + ", TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+            LineOut("PLEASE WAIT ..");
+            //goto Retry_ResetCommand;
+          }
+          else {
+            if (intmaxretries == 0) {
+              LineOut("INVALID RESPONSE, TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+              LineOutHexAndASCII(ByteArrayToString(bacomportbuffer));
+            }
+            else {
+              LineOut("MAX OF " + intmaxretries + " RETRIES REACHED, TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+            }
+          }
+        }
+        else {
+          LineOut("TX TO E:COUNT: " + stringtosend.Length + " BYTES: " + stringtosend);
+
+          string stringresponse = ByteArrayToString(bacomportbuffer);
+          LineOut("RX FROM E:COUNT: " + stringresponse.Length + " BYTES");
+          LineOutHexAndASCII(stringresponse);
+
+          //NOTE, C# ARRAY INDICES ARE 0-BASED
+          LineOut("COMMAND ECHO               (0,1)  ....: " + stringresponse.Substring(0, 1));
+          LineOut("TERMINATING PIPE CHARACTER (1,1)  ....: " + stringresponse.Substring(1, 1));
+
+        }
+
+        //build pcm command arrays to disconnect HOST
+        bytespcmtosend = StringToByteArray(Chr(255));
+
+        //send pcm command bytes
+        LineOut("SENDING PCM DISCONNECT COMMAND: ");
+        LineOutHexAndASCII(ByteArrayToString(bytespcmtosend));
+        serialPort1.Write(bytespcmtosend, 0, bytespcmtosend.GetUpperBound(0) + 1);
+
+
+      }
+      catch (Exception e1) {
+        LineOut("EXCEPTION IN DoEndCommand()", e1);
+      }
+
+
+      End_EndCommand:
+
+      LineOut("PROCESSING COMPLETE");
+      if (boolcomportopen) {
+        LineOut("CLOSING COM PORT");
+        CloseSerialPort(serialPort1);
+        boolcomportopen = false;
+      }
+      LineOut("============================");
+    }//end- DoEndCommand()
+
+    public void DoPrintCommands()
     {
 
-    }//end- DoPresetCommand()
-
+    }//end- DoPrintCommand()
 
     public void DoStatusCommand()
     {
@@ -669,7 +1203,7 @@ End_VersionCommand:
       int intthousandths = 0;
 
       int intpcmcommanddelay = 5;               //milliseconds
-      int intmaxcommandtimeouthundredths = 0;   //hundredths of seconds
+      int intmaxcommandtimeoutTenths = 0;   //hundredths of seconds
       int inttargetresponsecharcount = 0;
       int intmaxretries = 0;
       int intretrycount = 0;
@@ -741,7 +1275,7 @@ End_VersionCommand:
 
         //set parameters for V comamnd
         LineOut("INITIALIZING COMMAND CONTROL PARAMETERS");
-        intmaxcommandtimeouthundredths = 10;     //10 tenths = 100ms max to wait, this will vary from command to command
+        intmaxcommandtimeoutTenths = 10;     //10 tenths = 100ms max to wait, this will vary from command to command
         inttargetresponsecharcount = 6;      //6 hex buytes, this will vary from command to command
         intmaxretries = 5;                   //J cmd should be re-sent after 250ms if no response, for max of attempts (only J should be resent, no other commands should be re-sent)
         intretrycount = 0;
@@ -776,7 +1310,7 @@ Retry_StatusCommand:
 
         //wait for response
         inthundredths = 0;
-        while ((inthundredths < intmaxcommandtimeouthundredths) && (bacomportbuffer.Length < inttargetresponsecharcount))
+        while ((inthundredths < intmaxcommandtimeoutTenths) && (bacomportbuffer.Length < inttargetresponsecharcount))
         {
           inthundredths++;
           System.Windows.Forms.Application.DoEvents();
@@ -786,7 +1320,7 @@ Retry_StatusCommand:
 
         if (bacomportbuffer.Length < inttargetresponsecharcount)
         {
-          LineOut("RESPONSE TIMEOUT EXCEEDED " + intmaxcommandtimeouthundredths + " HUNDREDTHS OF A SECOND");
+          LineOut("RESPONSE TIMEOUT EXCEEDED " + intmaxcommandtimeoutTenths + " TENTHS OF A SECOND");
           if (intretrycount < intmaxretries)
           {
             intretrycount++;
@@ -1010,7 +1544,7 @@ End_StatusCommand:
       int intthousandths = 0;
 
       int intpcmcommanddelay = 5;              //milliseconds
-      int intmaxcommandtimeouthundredths = 0;  //HUNDREDTHS of second
+      int intmaxcommandtimeoutTenths = 0;  //HUNDREDTHS of second
       int inttargetresponsecharcount = 0;
       int intmaxretries = 0;
       int intretrycount = 0;
@@ -1121,7 +1655,7 @@ End_StatusCommand:
 
         //set parameters for o comamnd
         LineOut("INITIALIZING COMMAND CONTROL PARAMETERS");
-        intmaxcommandtimeouthundredths = 200;  //100 HUNDREDTHS = 2000ms max to wait, this will vary from command to command
+        intmaxcommandtimeoutTenths = 200;  //100 HUNDREDTHS = 2000ms max to wait, this will vary from command to command
         inttargetresponsecharcount = 3;        //3 bytes, this will vary from command to command
         intmaxretries = 0;                     //o command should not be re-sent
         intretrycount = 0;
@@ -1154,7 +1688,7 @@ End_StatusCommand:
 
         //wait for response
         inthundredths = 0;
-        while ((inthundredths < intmaxcommandtimeouthundredths) && (bacomportbuffer.Length < inttargetresponsecharcount))
+        while ((inthundredths < intmaxcommandtimeoutTenths) && (bacomportbuffer.Length < inttargetresponsecharcount))
         {
           inthundredths++;
           System.Windows.Forms.Application.DoEvents();
@@ -1165,9 +1699,9 @@ End_StatusCommand:
         if (bacomportbuffer.Length < inttargetresponsecharcount)
         {
           LineOut("INVALID RESPONSE, TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
-          if (inthundredths >= intmaxcommandtimeouthundredths)
+          if (inthundredths >= intmaxcommandtimeoutTenths)
           {
-            LineOut("RESPONSE TIMEOUT EXCEEDED " + intmaxcommandtimeouthundredths + " HUNDREDTHS OF A SECOND");
+            LineOut("RESPONSE TIMEOUT EXCEEDED " + intmaxcommandtimeoutTenths + " TENTHS OF A SECOND");
           }
           goto Disconnect_DoPassThroughPrintCommand;
         }
@@ -1291,7 +1825,7 @@ End_StatusCommand:
 
           //set parameters for qcomamnd
           LineOut("INITIALIZING COMMAND CONTROL PARAMETERS");
-          intmaxcommandtimeouthundredths = 200;  //200 HUNDREDTHS = 2000ms max to wait, this will vary from command to command
+          intmaxcommandtimeoutTenths = 200;  //200 HUNDREDTHS = 2000ms max to wait, this will vary from command to command
           inttargetresponsecharcount = 3;        //3 bytes, this will vary from command to command
           intmaxretries = 0;                     //o command should not be re-sent
           intretrycount = 0;
@@ -1304,7 +1838,7 @@ End_StatusCommand:
 
           //wait for response
           inthundredths = 0;
-          while ((inthundredths < intmaxcommandtimeouthundredths) && (bacomportbuffer.Length < inttargetresponsecharcount))
+          while ((inthundredths < intmaxcommandtimeoutTenths) && (bacomportbuffer.Length < inttargetresponsecharcount))
           {
             inthundredths++;
             System.Windows.Forms.Application.DoEvents();
@@ -1315,9 +1849,9 @@ End_StatusCommand:
           if (bacomportbuffer.Length < inttargetresponsecharcount)
           {
             LineOut("INVALID RESPONSE, TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
-            if (inthundredths >= intmaxcommandtimeouthundredths)
+            if (inthundredths >= intmaxcommandtimeoutTenths)
             {
-              LineOut("RESPONSE TIMEOUT EXCEEDED " + intmaxcommandtimeouthundredths + " HUNDREDTHS OF A SECOND");
+              LineOut("RESPONSE TIMEOUT EXCEEDED " + intmaxcommandtimeoutTenths + " TENTHS OF A SECOND");
             }
             goto SendFinish_DoPassThroughPrintCommand; //must 'finish' pass-through printing ...
           }
@@ -1395,7 +1929,7 @@ SendFinish_DoPassThroughPrintCommand:
 
         //set parameters for o comamnd
         LineOut("INITIALIZING COMMAND CONTROL PARAMETERS");
-        intmaxcommandtimeouthundredths = 600;  //600 HUNDREDTHS = 6000ms max to wait, this will vary from command to command, some printers are slow to finish
+        intmaxcommandtimeoutTenths = 600;  //600 HUNDREDTHS = 6000ms max to wait, this will vary from command to command, some printers are slow to finish
         inttargetresponsecharcount = 3;        //3 bytes, this will vary from command to command
         intmaxretries = 0;                     //o command should not be re-sent
         intretrycount = 0;
@@ -1428,7 +1962,7 @@ SendFinish_DoPassThroughPrintCommand:
 
         //wait for response
         inthundredths = 0;
-        while ((inthundredths < intmaxcommandtimeouthundredths) && (bacomportbuffer.Length < inttargetresponsecharcount))
+        while ((inthundredths < intmaxcommandtimeoutTenths) && (bacomportbuffer.Length < inttargetresponsecharcount))
         {
           inthundredths++;
           System.Windows.Forms.Application.DoEvents();
@@ -1439,9 +1973,9 @@ SendFinish_DoPassThroughPrintCommand:
         if (bacomportbuffer.Length < inttargetresponsecharcount)
         {
           LineOut("INVALID RESPONSE, TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
-          if (inthundredths >= intmaxcommandtimeouthundredths)
+          if (inthundredths >= intmaxcommandtimeoutTenths)
           {
-            LineOut("RESPONSE TIMEOUT EXCEEDED " + intmaxcommandtimeouthundredths + " HUNDREDTHS OF A SECOND");
+            LineOut("RESPONSE TIMEOUT EXCEEDED " + intmaxcommandtimeoutTenths + " TENTHS OF A SECOND");
           }
           goto Disconnect_DoPassThroughPrintCommand;
         }
@@ -1532,7 +2066,8 @@ End_DoPassThroughPrintCommand:
       btnReset.Enabled = boolenabled;
       btnMonitor.Enabled = boolenabled;
       btnToggleValves.Enabled = boolenabled;
-      btnEndAndPrint.Enabled = boolenabled;
+      btnEnd.Enabled = boolenabled;
+      btnPrint.Enabled = boolenabled;
     }
 
     private void Form1_FormClosing(object sender, FormClosingEventArgs e)
@@ -1611,10 +2146,17 @@ End_DoPassThroughPrintCommand:
       EnableControls(true);
     }
 
-    private void btnEndAndPrint_Click(object sender, EventArgs e)
+    private void btnEnd_Click(object sender, EventArgs e)
     {
       EnableControls(false);
-      DoEndAndPrintCommands();
+      DoEndCommands();
+      EnableControls(true);
+    }
+
+    private void btnPrint_Click(object sender, EventArgs e)
+    {
+      EnableControls(false);
+      DoPrintCommands();
       EnableControls(true);
     }
   }

@@ -40,7 +40,8 @@
       this.btnReset = new System.Windows.Forms.Button();
       this.btnMonitor = new System.Windows.Forms.Button();
       this.btnToggleValves = new System.Windows.Forms.Button();
-      this.btnEndAndPrint = new System.Windows.Forms.Button();
+      this.btnEnd = new System.Windows.Forms.Button();
+      this.btnPrint = new System.Windows.Forms.Button();
       this.SuspendLayout();
       // 
       // serialPort1
@@ -119,15 +120,15 @@
       this.txtPreset.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
       this.txtPreset.Location = new System.Drawing.Point(94, 433);
       this.txtPreset.Name = "txtPreset";
-      this.txtPreset.Size = new System.Drawing.Size(75, 20);
+      this.txtPreset.Size = new System.Drawing.Size(53, 20);
       this.txtPreset.TabIndex = 6;
       // 
       // btnReset
       // 
       this.btnReset.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-      this.btnReset.Location = new System.Drawing.Point(175, 431);
+      this.btnReset.Location = new System.Drawing.Point(153, 431);
       this.btnReset.Name = "btnReset";
-      this.btnReset.Size = new System.Drawing.Size(69, 23);
+      this.btnReset.Size = new System.Drawing.Size(54, 23);
       this.btnReset.TabIndex = 7;
       this.btnReset.Text = "Reset";
       this.btnReset.UseVisualStyleBackColor = true;
@@ -136,7 +137,7 @@
       // btnMonitor
       // 
       this.btnMonitor.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-      this.btnMonitor.Location = new System.Drawing.Point(250, 431);
+      this.btnMonitor.Location = new System.Drawing.Point(213, 431);
       this.btnMonitor.Name = "btnMonitor";
       this.btnMonitor.Size = new System.Drawing.Size(92, 23);
       this.btnMonitor.TabIndex = 8;
@@ -146,8 +147,8 @@
       // 
       // btnToggleValves
       // 
-      this.btnToggleValves.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-      this.btnToggleValves.Location = new System.Drawing.Point(348, 431);
+      this.btnToggleValves.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+      this.btnToggleValves.Location = new System.Drawing.Point(311, 431);
       this.btnToggleValves.Name = "btnToggleValves";
       this.btnToggleValves.Size = new System.Drawing.Size(92, 23);
       this.btnToggleValves.TabIndex = 9;
@@ -155,23 +156,35 @@
       this.btnToggleValves.UseVisualStyleBackColor = true;
       this.btnToggleValves.Click += new System.EventHandler(this.btnToggleValves_Click);
       // 
-      // btnEndAndPrint
+      // btnEnd
       // 
-      this.btnEndAndPrint.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-      this.btnEndAndPrint.Location = new System.Drawing.Point(446, 431);
-      this.btnEndAndPrint.Name = "btnEndAndPrint";
-      this.btnEndAndPrint.Size = new System.Drawing.Size(143, 23);
-      this.btnEndAndPrint.TabIndex = 10;
-      this.btnEndAndPrint.Text = "End && Print Delivery";
-      this.btnEndAndPrint.UseVisualStyleBackColor = true;
-      this.btnEndAndPrint.Click += new System.EventHandler(this.btnEndAndPrint_Click);
+      this.btnEnd.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+      this.btnEnd.Location = new System.Drawing.Point(425, 431);
+      this.btnEnd.Name = "btnEnd";
+      this.btnEnd.Size = new System.Drawing.Size(79, 23);
+      this.btnEnd.TabIndex = 10;
+      this.btnEnd.Text = "End Delivery";
+      this.btnEnd.UseVisualStyleBackColor = true;
+      this.btnEnd.Click += new System.EventHandler(this.btnEnd_Click);
+      // 
+      // btnPrint
+      // 
+      this.btnPrint.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+      this.btnPrint.Location = new System.Drawing.Point(510, 431);
+      this.btnPrint.Name = "btnPrint";
+      this.btnPrint.Size = new System.Drawing.Size(79, 23);
+      this.btnPrint.TabIndex = 11;
+      this.btnPrint.Text = "Print Host";
+      this.btnPrint.UseVisualStyleBackColor = true;
+      this.btnPrint.Click += new System.EventHandler(this.btnPrint_Click);
       // 
       // Form1
       // 
       this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
       this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
       this.ClientSize = new System.Drawing.Size(601, 472);
-      this.Controls.Add(this.btnEndAndPrint);
+      this.Controls.Add(this.btnPrint);
+      this.Controls.Add(this.btnEnd);
       this.Controls.Add(this.btnToggleValves);
       this.Controls.Add(this.btnMonitor);
       this.Controls.Add(this.btnReset);
@@ -204,7 +217,8 @@
     private System.Windows.Forms.Button btnReset;
     private System.Windows.Forms.Button btnMonitor;
     private System.Windows.Forms.Button btnToggleValves;
-    private System.Windows.Forms.Button btnEndAndPrint;
+    private System.Windows.Forms.Button btnEnd;
+    private System.Windows.Forms.Button btnPrint;
   }
 }
 
