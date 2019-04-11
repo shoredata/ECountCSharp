@@ -23,6 +23,7 @@ namespace pEcount
     {
       InitializeComponent();
       listBox1.Items.Clear();
+      timer1.Enabled = true;
     }
 
     public delegate void DataCOMAcquired(object sender);
@@ -66,7 +67,6 @@ namespace pEcount
       }
       listBox1.Items.Add(stringout);
       listBox1.SelectedIndex = listBox1.Items.Count-1;
-      listBox1.Refresh();
     }
     public void LineOut(string stringout)
     {
@@ -231,6 +231,10 @@ namespace pEcount
       return (int)charin;
     }
 
+    public string ToVolume(string stringin) {
+      return stringin.Substring(0, stringin.Length - 2) + "." + stringin.Substring(stringin.Length - 2);
+    }
+
     public string ByteArrayToString(byte[] byteArray)
     {
       string stringreturn = "";
@@ -349,21 +353,21 @@ namespace pEcount
         switch (intbit)
         {
           case 0:
-            return "Bit " + intbit + ": Timeout Elapsed";
+            return "  - Bit " + intbit + ": Timeout Elapsed";
           case 1:
-            return "Bit " + intbit + ": Print Key Pressed";
+            return "  - Bit " + intbit + ": Print Key Pressed";
           case 2:
-            return "Bit " + intbit + ": Preset Pending";
+            return "  - Bit " + intbit + ": Preset Pending";
           case 3:
-            return "Bit " + intbit + ": Valves Open";
+            return "  - Bit " + intbit + ": Valves Open";
           case 4:
-            return "Bit " + intbit + ": Product Flowing";
+            return "  - Bit " + intbit + ": Product Flowing";
           case 5:
-            return "Bit " + intbit + ": Delivery Active";
+            return "  - Bit " + intbit + ": Delivery Active";
           case 6:
-            return "Bit " + intbit + ": Ticket Pending";
+            return "  - Bit " + intbit + ": Ticket Pending";
           case 7:
-            return "Bit " + intbit + ": Host Mode Active";
+            return "  - Bit " + intbit + ": Host Mode Active";
         }
       }
       else if (intbyte == 2)
@@ -371,7 +375,7 @@ namespace pEcount
         switch (intbit)
         {
           case 0:
-            return "Bit " + intbit + ": Power Failure";
+            return "  - Bit " + intbit + ": Power Failure";
           case 1:
             return "Bit " + intbit + ": Host Mode Cancelled During Delivery";
         }
@@ -1006,8 +1010,16 @@ End_VersionCommand:
       LineOut("============================");
     }//end- DoResetCommand()
 
+    bool boolmonitoring = false;
     public void DoMonitorCommand()
-    {
+    {  //toggle monitor status
+      if (boolmonitoring) {
+        btnMonitor.Text = "Monitor Status";
+      }
+      else {
+        btnMonitor.Text = "Stop Monitor";
+      }
+      boolmonitoring = !boolmonitoring;
 
     }//end- DoMonitorCommand()
 
@@ -1740,129 +1752,9 @@ Retry_StatusCommand:
           }
 
           string strstatusbinary = Convert.ToString(bacomportbuffer[0], 2).PadLeft(8, '0');
-          LineOut("STATUS BIT# ....:  76543210");
-          LineOut("       VALUE ...:  " + strstatusbinary);
-          OutputStatusBits(1, strstatusbinary);
 
-          string stringregisterstatedescription = "";
-          int intregisterstate = 0;
-          string stringjcommandvolume = "";
+          DescribeStatusBytes(strstatusbinary);
 
-          bool booldeliveryactive = false;
-          bool boolproductflowing = false;
-          bool boolticketpending = false;
-
-          int intbinarystringbyte = 3; //byte 0 on left of the string
-          if (strstatusbinary[intbinarystringbyte].CompareTo('1') == 0)
-          {
-            boolproductflowing = true;
-          }
-          intbinarystringbyte = 2;
-          if (strstatusbinary[intbinarystringbyte].CompareTo('1') == 0)
-          {
-            booldeliveryactive = true;
-          }
-          intbinarystringbyte = 1;
-          if (strstatusbinary[intbinarystringbyte].CompareTo('1') == 0)
-          {
-            boolticketpending = true;
-          }
-          if (!booldeliveryactive)
-          {
-            if (!boolticketpending)
-            {
-              intregisterstate = 100;
-              stringregisterstatedescription = "NO DELIVERY ACTIVE";
-            }
-            else
-            {
-              intregisterstate = 400;
-              stringregisterstatedescription = "HOST MODE TICKET PENDING";
-
-              //LOOK AT OTHER VARIABLES HERE
-              intbinarystringbyte = 7; 
-              if (strstatusbinary[intbinarystringbyte].CompareTo('1') == 0)
-              {
-                stringregisterstatedescription += ", NO-FLOW TIMEOUT ELAPSED";
-              }
-              intbinarystringbyte = 6;
-              if (strstatusbinary[intbinarystringbyte].CompareTo('1') == 0)
-              {
-                stringregisterstatedescription += ", <PRINT> KEY PRESSED";
-              }
-
-            }
-          }
-          else
-          {
-            if (!boolproductflowing)
-            {
-              intregisterstate = 200;
-              stringregisterstatedescription = "DELIVERY ACTIVE, NO PRODUCT FLOW";
-            }
-            else
-            {
-              intregisterstate = 300;
-              stringregisterstatedescription = "DELIVERY ACTIVE, PRODUCT FLOWING";
-            }
-
-            //LOOK AT OTHER VARIABLES HERE
-            intbinarystringbyte = 5;
-            if (strstatusbinary[intbinarystringbyte].CompareTo('1') == 0)
-            {
-              stringregisterstatedescription += ", PRESET PENDING";
-            }
-            intbinarystringbyte = 4;
-            if (strstatusbinary[intbinarystringbyte].CompareTo('1') == 0)
-            {
-              stringregisterstatedescription += ", VALVES OPEN";
-            }
-            else
-            {
-              stringregisterstatedescription += ", VALVES CLOSED";
-            }
-            intbinarystringbyte = 0;
-            if (strstatusbinary[intbinarystringbyte].CompareTo('1') == 0)
-            {
-              stringregisterstatedescription += ", HOST MODE ACTIVE";
-            }
-
-          }
-
-          if (intregisterstate > 100)
-          {
-            //if delivery active or ticket pending then show register volume
-
-            //NOTE: IF PRODUCT IS FLOWING THIS VOLUME WILL BE 'STALE' AS THE CURRENT DELIVERY VOLUME
-            // DISPLAYED ON THE ECOUNT WILL BE UPDATED IMMEDIATLEY WHILE PULSES ARE BEING DETECTED, THE RESULT WILL BE 
-            // THAT THE VALUE RECIEVED HERE WILL APPEAR TO LAG BEHIND THE ECOUNT DISPLAYED VOLUME. AS SOON
-            // AS PRODUCT FLOW STOPS THE VOLUME REFLECTED HERE SHOULD 'CATCH UP' TO THE E:COUNT DISPLAYED VOLUME
-
-            byte[] balocalvolumebytes = new byte[4];
-            for (int idz = 0; idz < 4; idz++)
-            {
-              balocalvolumebytes[idz] = bacomportbuffer[idz + 1];
-            }
-            string stringvolume = CurrentVolumeFromHexByteArrayToDecimalString(balocalvolumebytes);
-            if (!IsNumeric(stringvolume))
-            {
-              LineOut("INVALID J VALUE-BYTES: VOLUME IS NON-NUMERIC");
-            }
-            else
-            {
-              stringjcommandvolume = stringvolume;
-            }
-
-
-          }//end- register state is in delivery or ticket pending
-
-          intlastregisterstate = intregisterstate;
-
-          LineOut("E:COUNT STATE = " + intregisterstate + ": " + stringregisterstatedescription);
-          if (stringjcommandvolume.Length > 0)
-          {
-            LineOut("J COMMAND VOLUME: " + stringjcommandvolume);
-          }
 
         }//end- buffer length is valid for response
 
@@ -1898,6 +1790,336 @@ End_StatusCommand:
 
 
     }//end- DoStatusCommand()
+
+
+    public void DescribeStatusBytes(string strstatusbinary)
+    {
+
+      //string strstatusbinary = Convert.ToString(bacomportbuffer[0], 2).PadLeft(8, '0');
+      LineOut("STATUS BIT# ....:  76543210");
+      LineOut("       VALUE ...:  " + strstatusbinary);
+      OutputStatusBits(1, strstatusbinary);
+
+      string stringregisterstatedescription = "";
+      int intregisterstate = 0;
+      string stringjcommandvolume = "";
+
+      bool booldeliveryactive = false;
+      bool boolproductflowing = false;
+      bool boolticketpending = false;
+
+      int intbinarystringbyte = 3; //byte 0 on left of the string
+      if (strstatusbinary[intbinarystringbyte].CompareTo('1') == 0) {
+        boolproductflowing = true;
+      }
+      intbinarystringbyte = 2;
+      if (strstatusbinary[intbinarystringbyte].CompareTo('1') == 0) {
+        booldeliveryactive = true;
+      }
+      intbinarystringbyte = 1;
+      if (strstatusbinary[intbinarystringbyte].CompareTo('1') == 0) {
+        boolticketpending = true;
+      }
+      if (!booldeliveryactive) {
+        if (!boolticketpending) {
+          intregisterstate = 100;
+          stringregisterstatedescription = "NO DELIVERY ACTIVE";
+        }
+        else {
+          intregisterstate = 400;
+          stringregisterstatedescription = "HOST MODE TICKET PENDING";
+        }
+      }
+      else {
+        //LineOut("  - Bit 5 ON: DELIVERY ACTIVE");
+        if (!boolproductflowing) {
+          intregisterstate = 200;
+          stringregisterstatedescription = "DELIVERY ACTIVE, NO PRODUCT FLOW";
+        }
+        else {
+          intregisterstate = 300;
+          stringregisterstatedescription = "DELIVERY ACTIVE, PRODUCT FLOWING";
+          //LineOut("  - Bit 4 ON: PRODUCT FLOWING");
+        }
+
+        ////ONLY IN 20/300
+        //intbinarystringbyte = 4;
+        //if (strstatusbinary[intbinarystringbyte].CompareTo('1') == 0) {
+        //  LineOut("  - Bit 3 ON: VALVES OPEN");
+        //}
+        //else {
+        //  LineOut("  - Bit 3 OFF: VALVES CLOSED");
+        //}
+      }
+      //intbinarystringbyte = 0; //big-endian for the string passed in
+      //if (strstatusbinary[intbinarystringbyte].CompareTo('1') == 0) {
+      //  LineOut("  - Bit 7 ON: HOST MODE ACTIVE");
+      //}
+      //intbinarystringbyte = 1; //big-endian for the string passed in
+      //if (strstatusbinary[intbinarystringbyte].CompareTo('1') == 0) {
+      //  LineOut("  - Bit 6 ON: TICKET PENDING");
+      //}
+
+      //intbinarystringbyte = 5;
+      //if (strstatusbinary[intbinarystringbyte].CompareTo('1') == 0) {
+      //  LineOut("  - Bit 2 ON: PRESET PENDING");
+      //}
+      //intbinarystringbyte = 6;
+      //if (strstatusbinary[intbinarystringbyte].CompareTo('1') == 0) {
+      //  LineOut("  - Bit 1 ON: <PRINT> KEY PRESSED");
+      //}
+      //intbinarystringbyte = 7;
+      //if (strstatusbinary[intbinarystringbyte].CompareTo('1') == 0) {
+      //  LineOut("  - Bit 0 ON: NO-FLOW TIMEOUT ELAPSED");
+      //}
+
+
+
+
+      if (intregisterstate > 100) {
+        //if delivery active or ticket pending then show register volume
+
+        //NOTE: IF PRODUCT IS FLOWING THIS VOLUME WILL BE 'STALE' AS THE CURRENT DELIVERY VOLUME
+        // DISPLAYED ON THE ECOUNT WILL BE UPDATED IMMEDIATLEY WHILE PULSES ARE BEING DETECTED, THE RESULT WILL BE 
+        // THAT THE VALUE RECIEVED HERE WILL APPEAR TO LAG BEHIND THE ECOUNT DISPLAYED VOLUME. AS SOON
+        // AS PRODUCT FLOW STOPS THE VOLUME REFLECTED HERE SHOULD 'CATCH UP' TO THE E:COUNT DISPLAYED VOLUME
+
+        byte[] balocalvolumebytes = new byte[4];
+        for (int idz = 0; idz < 4; idz++) {
+          balocalvolumebytes[idz] = bacomportbuffer[idz + 1];
+        }
+        string stringvolume = CurrentVolumeFromHexByteArrayToDecimalString(balocalvolumebytes);
+        if (!IsNumeric(stringvolume)) {
+          LineOut("INVALID J VALUE-BYTES: VOLUME IS NON-NUMERIC");
+        }
+        else {
+          stringjcommandvolume = stringvolume;
+        }
+
+
+      }//end- register state is in delivery or ticket pending
+
+
+      intlastregisterstate = intregisterstate;
+
+      LineOut("E:COUNT STATE = " + intregisterstate + ": " + stringregisterstatedescription);
+      if (stringjcommandvolume.Length > 0) {
+        LineOut("****** J COMMAND VOLUME: " + stringjcommandvolume + " ******");
+      }
+
+
+    } // end DescribeStatusBytes()
+
+
+    public void DoGetDeliveryDataCommand() {
+      //string stringfunction = "DoGetDeliveryDataCommand";
+
+      bool boolcomportopen = false;
+
+      byte[] bytestosend;
+      byte[] bytespcmtosend;
+
+      int inthundredths = 0;
+      int intthousandths = 0;
+
+      int intpcmcommanddelay = 5;               //milliseconds
+      int intmaxcommandtimeoutTenths = 0;       //HUNDREDTHS of seconds
+      int inttargetresponsecharcount = 0;
+      int intmaxretries = 0;
+      int intretrycount = 0;
+      int intretrytimeoutmilliseconds = 0;      //milliseconds
+
+      string stringout = "";
+
+      try {
+        //1. com port
+        //2. pcm command
+        //3. send command
+        //4. get response
+        //5. parse response
+        //6. close pcm
+
+        LineOut("*** GET E:COUNT DELIVERY DATA (T) ***");
+
+        LineOut("USING SERIAL PORT COM" + intcurrentcomport);
+        if (!IsCOMPortValid(intcurrentcomport)) {
+          stringout = "INVALID COM PORT! CHECK DEVICE MANAGER";
+          LineOut(stringout);
+          System.Windows.Forms.MessageBox.Show(stringout);
+          goto End_GetDeliveryDataCommand;
+        }
+
+        //setup com port and open it
+        if (boolcomportopen) {
+          //if the port is open, close it (possibly due to an error)
+          LineOut("COM PORT ALREADY OPEN, CLOSING");
+          CloseSerialPort(serialPort1);
+          boolcomportopen = false;
+        }
+        LineOut("INITIALIZING COM PORT");
+        boolcomportopen = OpenSerialPort(serialPort1);
+        if (!boolcomportopen) {
+          LineOut("ERROR INITIALIZING COM PORT!");
+          goto End_GetDeliveryDataCommand;
+        }
+
+
+        //Command Sequence:
+        //TX: 0x1F 0x02(Connect PCM - Host to PCM - EC1)
+        //TX: T
+        //RX: T(Verify T is echoed)
+        //RX: bytes … | (Verify response bytes +pipe char)
+        //TX: 0xFF(Disconnect PCM)
+
+        string stringtosend = "T";  //get delivery data
+
+        //build pcm and command arrays to connect HOST to REGISTER1 (0x1F 0x02) and then send V (0x56)
+        LineOut("BUILDING COMMAND BYTEARRAYS");
+        bytespcmtosend = StringToByteArray(Chr(31) + Chr(2));  //chr(31) = HEX 0x1F, chr(2) = HEX 0x02 
+        bytestosend = StringToByteArray(stringtosend);            // Built above
+
+        //set parameters for comamnd
+        LineOut("INITIALIZING COMMAND CONTROL PARAMETERS");
+        intmaxcommandtimeoutTenths = 200;    //2 sec = tenths = N * 10ms max to wait, this will vary from command to command
+        inttargetresponsecharcount = 98;     //T + 96 data + |, this will vary from command to command
+        intmaxretries = 1;                   //T cmd resent 1 time? 
+        intretrycount = 0;
+        intretrytimeoutmilliseconds = 0;     //delay between retries in ms, J command is only cmd retry that is valid, J requires *min* of 250 ms between retries
+
+      Retry_GetDeliveryDataCommand:
+
+        //clear RX buffer before sending
+        LineOut("CLEARING COM PORT BUFFER");
+        bacomportbuffer = new byte[] { };
+
+        //send pcm command bytes
+        LineOut("SENDING PCM CONNECT HOST-TO-REG1 COMMAND: ");
+        LineOutHexAndASCII(ByteArrayToString(bytespcmtosend));
+        serialPort1.Write(bytespcmtosend, 0, bytespcmtosend.GetUpperBound(0) + 1);
+
+        //wait X ms for PCM hardware to complete port switching
+        LineOut("WAITING FOR PCM TO SWITCH PORTS ..");
+        intthousandths = 0;
+        while (intthousandths < intpcmcommanddelay) {
+          //this is a kludge
+          intthousandths++;
+          System.Windows.Forms.Application.DoEvents();
+          System.Threading.Thread.Sleep(1);  //1 = 1ms
+        }
+
+        //send command bytes
+        LineOut("SENDING E:COUNT COMMAND: ");
+        LineOutHexAndASCII(ByteArrayToString(bytestosend));
+        serialPort1.Write(bytestosend, 0, bytestosend.GetUpperBound(0) + 1);
+
+        //wait for response
+        inthundredths = 0;
+        while ((inthundredths < intmaxcommandtimeoutTenths) && (bacomportbuffer.Length < inttargetresponsecharcount)) {
+          inthundredths++;
+          System.Windows.Forms.Application.DoEvents();
+          System.Threading.Thread.Sleep(10);  //10 = 10ms, 10ms is one-hundredth of a second ..
+          System.Windows.Forms.Application.DoEvents();
+        }
+
+        if (bacomportbuffer.Length < inttargetresponsecharcount) {
+          LineOut("RESPONSE TIMEOUT EXCEEDED " + intmaxcommandtimeoutTenths + " TENTHS OF A SECOND");
+          if (intretrycount < intmaxretries) {
+            intretrycount++;
+            System.Threading.Thread.Sleep(intretrytimeoutmilliseconds);
+            LineOut("RETRY # " + intretrycount + " OF " + intmaxretries + ", TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+            LineOut("PLEASE WAIT ..");
+            goto End_GetDeliveryDataCommand;
+          }
+          else {
+            if (intmaxretries == 0) {
+              LineOut("INVALID RESPONSE, TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+              LineOutHexAndASCII(ByteArrayToString(bacomportbuffer));
+            }
+            else {
+              LineOut("MAX OF " + intmaxretries + " RETRIES REACHED, TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+            }
+          }
+        }
+        else {
+          LineOut("TX TO E:COUNT: " + stringtosend.Length + " BYTES: " + stringtosend);
+
+          string stringresponse = ByteArrayToString(bacomportbuffer);
+          LineOut("RX FROM E:COUNT: " + stringresponse.Length + " BYTES");
+          LineOutHexAndASCII(stringresponse);
+
+          //NOTE, C# ARRAY INDICES ARE 0-BASED
+          LineOut("COMMAND ECHO               (0,1)    ....: " + stringresponse.Substring(0, 1));
+          LineOut("START TIME                 (1,12)   ....: " + stringresponse.Substring(1, 12));
+          LineOut("FINISH TIME                (13,12)  ....: " + stringresponse.Substring(13, 12));
+          LineOut("PRODUCT CODE               (25,4)   ....: " + stringresponse.Substring(25, 4));
+          LineOut("TRUCK #                    (29,6)   ....: " + stringresponse.Substring(29, 6));
+          LineOut("DRIVER #                   (35,6)   ....: " + stringresponse.Substring(35, 6));
+          LineOut("SALE #                     (41,8)   ....: " + stringresponse.Substring(41, 8));
+          LineOut("NET VOLUME                 (49,10)  ....: " + stringresponse.Substring(49, 10));
+          LineOut("GROSS VOLUME               (59,10)  ....: " + stringresponse.Substring(59, 10));
+          LineOut("NET FINISH TOTALIZER       (69,10)  ....: " + stringresponse.Substring(69, 10));
+          LineOut("GROSS FINISH TOTALIZER     (79,10)  ....: " + stringresponse.Substring(79, 10));
+          LineOut("COMPENSATOR STATE          (89,3)   ....: " + stringresponse.Substring(89, 3));
+          LineOut("DELIVERY STATUS            (92,5)   ....: " + stringresponse.Substring(92, 5));
+          LineOut("TERMINATING PIPE CHARACTER (97,1)   ....: " + stringresponse.Substring(97, 1));
+
+          //Field                     Format          Length(bytes)
+          //-------------------------------------------------------
+          //Start Time + CRLF         MMDDYYHHMM              12
+          //Finish Time +CRLF         MMDDYYHHMM              12
+          //Product Code +CRLF        00 - 99                 4
+          //Truck # + CRLF            0000-9999               6
+          //Driver # + CRLF           0000-9999               6
+          //Sale # + CRLF             000000-999999           8
+          //Net Volume + CRLF         00000000 - 99999999     10
+          //Gross Volume +CRLF        00000000 - 99999999     10
+          //Net Totalizer +CRLF       00000000 - 99999999     10
+          //Gross Totalizer +CRLF     00000000 - 99999999     10
+          //Compensator State +CRLF   0 - 1(0 = Off, 1 = On)  3
+          //Delivery Status +CRLF     xxx                     5
+          //=========================================================
+          //Total 96 Bytes
+
+
+          string strstatusbinary = Convert.ToString(bacomportbuffer[92], 2).PadLeft(8, '0');
+          LineOut("STATUS BIT#1....:  76543210");
+          LineOut("       VALUE ...:  " + strstatusbinary);
+          OutputStatusBits(1, strstatusbinary);
+
+          strstatusbinary = Convert.ToString(bacomportbuffer[93], 2).PadLeft(8, '0');
+          LineOut("STATUS BIT#2....:  76543210");
+          LineOut("       VALUE ...:  " + strstatusbinary);
+          OutputStatusBits(2, strstatusbinary);
+
+
+
+        }
+
+        //build pcm command arrays to disconnect HOST
+        bytespcmtosend = StringToByteArray(Chr(255));
+
+        //send pcm command bytes
+        LineOut("SENDING PCM DISCONNECT COMMAND: ");
+        LineOutHexAndASCII(ByteArrayToString(bytespcmtosend));
+        serialPort1.Write(bytespcmtosend, 0, bytespcmtosend.GetUpperBound(0) + 1);
+
+
+      }
+      catch (Exception e1) {
+        LineOut("EXCEPTION IN DoPrintCommand()", e1);
+      }
+
+
+    End_GetDeliveryDataCommand:
+
+      LineOut("PROCESSING COMPLETE");
+      if (boolcomportopen) {
+        LineOut("CLOSING COM PORT");
+        CloseSerialPort(serialPort1);
+        boolcomportopen = false;
+      }
+      LineOut("============================");
+    }//end- DoGetDeliveryDataCommand()
 
 
     public void DoPassThroughPrintCommand()
@@ -2437,16 +2659,21 @@ End_DoPassThroughPrintCommand:
       btnToggleValves.Enabled = boolenabled;
       btnEnd.Enabled = boolenabled;
       btnPrint.Enabled = boolenabled;
+      btnGetDeliveryData.Enabled = boolenabled;
+      listBox1.Refresh();
     }
 
     private void Form1_FormClosing(object sender, FormClosingEventArgs e)
     {
+      //make sure timer doesn't fire
+      timer1.Enabled = false;
+
       //could check any, button1 is as good as any
-      if (!btnGetVersion.Enabled) 
-      {
+      if (!btnGetVersion.Enabled) {
         //the control is not enabled, cancel the form unload since the app is busy
         e.Cancel = true;
       }
+
     }
 
     private void btnGetVersion_Click(object sender, EventArgs e)
@@ -2503,9 +2730,7 @@ End_DoPassThroughPrintCommand:
 
     private void btnMonitor_Click(object sender, EventArgs e)
     {
-      EnableControls(false);
       DoMonitorCommand();
-      EnableControls(true);
     }
 
     private void btnToggleValves_Click(object sender, EventArgs e)
@@ -2526,6 +2751,22 @@ End_DoPassThroughPrintCommand:
     {
       EnableControls(false);
       DoPrintCommands();
+      EnableControls(true);
+    }
+
+    private void timer1_Tick(object sender, EventArgs e)
+    {
+      if (boolmonitoring) {
+        if (btnMonitor.Enabled) {
+          btnGetStatus_Click(null, null);
+        }
+      }
+    }
+
+    private void btnGetDeliveryData_Click(object sender, EventArgs e)
+    {
+      EnableControls(false);
+      DoGetDeliveryDataCommand();
       EnableControls(true);
     }
   }

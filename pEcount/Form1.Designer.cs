@@ -42,6 +42,8 @@
       this.btnToggleValves = new System.Windows.Forms.Button();
       this.btnEnd = new System.Windows.Forms.Button();
       this.btnPrint = new System.Windows.Forms.Button();
+      this.timer1 = new System.Windows.Forms.Timer(this.components);
+      this.btnGetDeliveryData = new System.Windows.Forms.Button();
       this.SuspendLayout();
       // 
       // serialPort1
@@ -178,11 +180,28 @@
       this.btnPrint.UseVisualStyleBackColor = true;
       this.btnPrint.Click += new System.EventHandler(this.btnPrint_Click);
       // 
+      // timer1
+      // 
+      this.timer1.Interval = 2000;
+      this.timer1.Tick += new System.EventHandler(this.timer1_Tick);
+      // 
+      // btnGetDeliveryData
+      // 
+      this.btnGetDeliveryData.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+      this.btnGetDeliveryData.Location = new System.Drawing.Point(298, 402);
+      this.btnGetDeliveryData.Name = "btnGetDeliveryData";
+      this.btnGetDeliveryData.Size = new System.Drawing.Size(117, 23);
+      this.btnGetDeliveryData.TabIndex = 12;
+      this.btnGetDeliveryData.Text = "Get Delivery Data";
+      this.btnGetDeliveryData.UseVisualStyleBackColor = true;
+      this.btnGetDeliveryData.Click += new System.EventHandler(this.btnGetDeliveryData_Click);
+      // 
       // Form1
       // 
       this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
       this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
       this.ClientSize = new System.Drawing.Size(601, 472);
+      this.Controls.Add(this.btnGetDeliveryData);
       this.Controls.Add(this.btnPrint);
       this.Controls.Add(this.btnEnd);
       this.Controls.Add(this.btnToggleValves);
@@ -219,6 +238,8 @@
     private System.Windows.Forms.Button btnToggleValves;
     private System.Windows.Forms.Button btnEnd;
     private System.Windows.Forms.Button btnPrint;
+    private System.Windows.Forms.Timer timer1;
+    private System.Windows.Forms.Button btnGetDeliveryData;
   }
 }
 
