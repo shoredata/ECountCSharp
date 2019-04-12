@@ -2472,9 +2472,6 @@ End_DoPassThroughPrintCommand:
       int intthousandths = 0;
 
       int intpcmcommanddelay = 5;               //milliseconds
-      //int intmaxcommandtimeoutTenths = 0;       //HUNDREDTHS of seconds
-      //int inttargetresponsecharcount = 0;
-      //int intmaxretries = 0;
       int intretrycount = 0;
       int intretrytimeoutmilliseconds = 0;      //milliseconds
 
