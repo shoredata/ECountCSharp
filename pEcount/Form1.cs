@@ -1912,213 +1912,280 @@ End_StatusCommand:
 
 
     public void DoGetDeliveryDataCommand() {
-      //string stringfunction = "DoGetDeliveryDataCommand";
-
-      bool boolcomportopen = false;
-
-      byte[] bytestosend;
-      byte[] bytespcmtosend;
-
-      int inthundredths = 0;
-      int intthousandths = 0;
-
-      int intpcmcommanddelay = 5;               //milliseconds
-      int intmaxcommandtimeoutTenths = 0;       //HUNDREDTHS of seconds
-      int inttargetresponsecharcount = 0;
-      int intmaxretries = 0;
-      int intretrycount = 0;
-      int intretrytimeoutmilliseconds = 0;      //milliseconds
-
-      string stringout = "";
-
-      try {
-        //1. com port
-        //2. pcm command
-        //3. send command
-        //4. get response
-        //5. parse response
-        //6. close pcm
-
-        LineOut("*** GET E:COUNT DELIVERY DATA (T) ***");
-
-        LineOut("USING SERIAL PORT COM" + intcurrentcomport);
-        if (!IsCOMPortValid(intcurrentcomport)) {
-          stringout = "INVALID COM PORT! CHECK DEVICE MANAGER";
-          LineOut(stringout);
-          System.Windows.Forms.MessageBox.Show(stringout);
-          goto End_GetDeliveryDataCommand;
-        }
-
-        //setup com port and open it
-        if (boolcomportopen) {
-          //if the port is open, close it (possibly due to an error)
-          LineOut("COM PORT ALREADY OPEN, CLOSING");
-          CloseSerialPort(serialPort1);
-          boolcomportopen = false;
-        }
-        LineOut("INITIALIZING COM PORT");
-        boolcomportopen = OpenSerialPort(serialPort1);
-        if (!boolcomportopen) {
-          LineOut("ERROR INITIALIZING COM PORT!");
-          goto End_GetDeliveryDataCommand;
-        }
 
 
-        //Command Sequence:
-        //TX: 0x1F 0x02(Connect PCM - Host to PCM - EC1)
-        //TX: T
-        //RX: T(Verify T is echoed)
-        //RX: bytes … | (Verify response bytes +pipe char)
-        //TX: 0xFF(Disconnect PCM)
+      int intmaxcommandtimeoutTenths = 200; //tenths
+      int inttargetresponsecharcount = 98;  // cmd echo + DataBindings + pipe
+      int intmaxretries = 1;                // 0 = do not retry
+      string stringcommand = "*** GET E:COUNT DELIVERY DATA (T) ***";
+      string stringtosend = "T";  //get delivery data
+      string stringresponse = "";
+      bool boolresponsevalid = false;
 
-        string stringtosend = "T";  //get delivery data
+      DoSendCommand(stringtosend, inttargetresponsecharcount, intmaxcommandtimeoutTenths, intmaxretries, stringcommand, 
+        out stringresponse, 
+        out boolresponsevalid);
 
-        //build pcm and command arrays to connect HOST to REGISTER1 (0x1F 0x02) and then send V (0x56)
-        LineOut("BUILDING COMMAND BYTEARRAYS");
-        bytespcmtosend = StringToByteArray(Chr(31) + Chr(2));  //chr(31) = HEX 0x1F, chr(2) = HEX 0x02 
-        bytestosend = StringToByteArray(stringtosend);            // Built above
+      if (boolresponsevalid) {
 
-        //set parameters for comamnd
-        LineOut("INITIALIZING COMMAND CONTROL PARAMETERS");
-        intmaxcommandtimeoutTenths = 200;    //2 sec = tenths = N * 10ms max to wait, this will vary from command to command
-        inttargetresponsecharcount = 98;     //T + 96 data + |, this will vary from command to command
-        intmaxretries = 1;                   //T cmd resent 1 time? 
-        intretrycount = 0;
-        intretrytimeoutmilliseconds = 0;     //delay between retries in ms, J command is only cmd retry that is valid, J requires *min* of 250 ms between retries
+        //NOTE, C# ARRAY INDICES ARE 0-BASED
+        LineOut("COMMAND ECHO               (0,1)    ....: " + stringresponse.Substring(0, 1));
+        LineOut("START TIME                 (1,12)   ....: " + stringresponse.Substring(1, 12));
+        LineOut("FINISH TIME                (13,12)  ....: " + stringresponse.Substring(13, 12));
+        LineOut("PRODUCT CODE               (25,4)   ....: " + stringresponse.Substring(25, 4));
+        LineOut("TRUCK #                    (29,6)   ....: " + stringresponse.Substring(29, 6));
+        LineOut("DRIVER #                   (35,6)   ....: " + stringresponse.Substring(35, 6));
+        LineOut("SALE #                     (41,8)   ....: " + stringresponse.Substring(41, 8));
+        LineOut("NET VOLUME                 (49,10)  ....: " + stringresponse.Substring(49, 10));
+        LineOut("GROSS VOLUME               (59,10)  ....: " + stringresponse.Substring(59, 10));
+        LineOut("NET FINISH TOTALIZER       (69,10)  ....: " + stringresponse.Substring(69, 10));
+        LineOut("GROSS FINISH TOTALIZER     (79,10)  ....: " + stringresponse.Substring(79, 10));
+        LineOut("COMPENSATOR STATE          (89,3)   ....: " + stringresponse.Substring(89, 3));
+        LineOut("DELIVERY STATUS            (92,5)   ....: " + stringresponse.Substring(92, 5));
+        LineOut("TERMINATING PIPE CHARACTER (97,1)   ....: " + stringresponse.Substring(97, 1));
 
-      Retry_GetDeliveryDataCommand:
-
-        //clear RX buffer before sending
-        LineOut("CLEARING COM PORT BUFFER");
-        bacomportbuffer = new byte[] { };
-
-        //send pcm command bytes
-        LineOut("SENDING PCM CONNECT HOST-TO-REG1 COMMAND: ");
-        LineOutHexAndASCII(ByteArrayToString(bytespcmtosend));
-        serialPort1.Write(bytespcmtosend, 0, bytespcmtosend.GetUpperBound(0) + 1);
-
-        //wait X ms for PCM hardware to complete port switching
-        LineOut("WAITING FOR PCM TO SWITCH PORTS ..");
-        intthousandths = 0;
-        while (intthousandths < intpcmcommanddelay) {
-          //this is a kludge
-          intthousandths++;
-          System.Windows.Forms.Application.DoEvents();
-          System.Threading.Thread.Sleep(1);  //1 = 1ms
-        }
-
-        //send command bytes
-        LineOut("SENDING E:COUNT COMMAND: ");
-        LineOutHexAndASCII(ByteArrayToString(bytestosend));
-        serialPort1.Write(bytestosend, 0, bytestosend.GetUpperBound(0) + 1);
-
-        //wait for response
-        inthundredths = 0;
-        while ((inthundredths < intmaxcommandtimeoutTenths) && (bacomportbuffer.Length < inttargetresponsecharcount)) {
-          inthundredths++;
-          System.Windows.Forms.Application.DoEvents();
-          System.Threading.Thread.Sleep(10);  //10 = 10ms, 10ms is one-hundredth of a second ..
-          System.Windows.Forms.Application.DoEvents();
-        }
-
-        if (bacomportbuffer.Length < inttargetresponsecharcount) {
-          LineOut("RESPONSE TIMEOUT EXCEEDED " + intmaxcommandtimeoutTenths + " TENTHS OF A SECOND");
-          if (intretrycount < intmaxretries) {
-            intretrycount++;
-            System.Threading.Thread.Sleep(intretrytimeoutmilliseconds);
-            LineOut("RETRY # " + intretrycount + " OF " + intmaxretries + ", TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
-            LineOut("PLEASE WAIT ..");
-            goto End_GetDeliveryDataCommand;
-          }
-          else {
-            if (intmaxretries == 0) {
-              LineOut("INVALID RESPONSE, TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
-              LineOutHexAndASCII(ByteArrayToString(bacomportbuffer));
-            }
-            else {
-              LineOut("MAX OF " + intmaxretries + " RETRIES REACHED, TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
-            }
-          }
-        }
-        else {
-          LineOut("TX TO E:COUNT: " + stringtosend.Length + " BYTES: " + stringtosend);
-
-          string stringresponse = ByteArrayToString(bacomportbuffer);
-          LineOut("RX FROM E:COUNT: " + stringresponse.Length + " BYTES");
-          LineOutHexAndASCII(stringresponse);
-
-          //NOTE, C# ARRAY INDICES ARE 0-BASED
-          LineOut("COMMAND ECHO               (0,1)    ....: " + stringresponse.Substring(0, 1));
-          LineOut("START TIME                 (1,12)   ....: " + stringresponse.Substring(1, 12));
-          LineOut("FINISH TIME                (13,12)  ....: " + stringresponse.Substring(13, 12));
-          LineOut("PRODUCT CODE               (25,4)   ....: " + stringresponse.Substring(25, 4));
-          LineOut("TRUCK #                    (29,6)   ....: " + stringresponse.Substring(29, 6));
-          LineOut("DRIVER #                   (35,6)   ....: " + stringresponse.Substring(35, 6));
-          LineOut("SALE #                     (41,8)   ....: " + stringresponse.Substring(41, 8));
-          LineOut("NET VOLUME                 (49,10)  ....: " + stringresponse.Substring(49, 10));
-          LineOut("GROSS VOLUME               (59,10)  ....: " + stringresponse.Substring(59, 10));
-          LineOut("NET FINISH TOTALIZER       (69,10)  ....: " + stringresponse.Substring(69, 10));
-          LineOut("GROSS FINISH TOTALIZER     (79,10)  ....: " + stringresponse.Substring(79, 10));
-          LineOut("COMPENSATOR STATE          (89,3)   ....: " + stringresponse.Substring(89, 3));
-          LineOut("DELIVERY STATUS            (92,5)   ....: " + stringresponse.Substring(92, 5));
-          LineOut("TERMINATING PIPE CHARACTER (97,1)   ....: " + stringresponse.Substring(97, 1));
-
-          //Field                     Format          Length(bytes)
-          //-------------------------------------------------------
-          //Start Time + CRLF         MMDDYYHHMM              12
-          //Finish Time +CRLF         MMDDYYHHMM              12
-          //Product Code +CRLF        00 - 99                 4
-          //Truck # + CRLF            0000-9999               6
-          //Driver # + CRLF           0000-9999               6
-          //Sale # + CRLF             000000-999999           8
-          //Net Volume + CRLF         00000000 - 99999999     10
-          //Gross Volume +CRLF        00000000 - 99999999     10
-          //Net Totalizer +CRLF       00000000 - 99999999     10
-          //Gross Totalizer +CRLF     00000000 - 99999999     10
-          //Compensator State +CRLF   0 - 1(0 = Off, 1 = On)  3
-          //Delivery Status +CRLF     xxx                     5
-          //=========================================================
-          //Total 96 Bytes
+        //Field                     Format          Length(bytes)
+        //-------------------------------------------------------
+        //Start Time + CRLF         MMDDYYHHMM              12
+        //Finish Time +CRLF         MMDDYYHHMM              12
+        //Product Code +CRLF        00 - 99                 4
+        //Truck # + CRLF            0000-9999               6
+        //Driver # + CRLF           0000-9999               6
+        //Sale # + CRLF             000000-999999           8
+        //Net Volume + CRLF         00000000 - 99999999     10
+        //Gross Volume +CRLF        00000000 - 99999999     10
+        //Net Totalizer +CRLF       00000000 - 99999999     10
+        //Gross Totalizer +CRLF     00000000 - 99999999     10
+        //Compensator State +CRLF   0 - 1(0 = Off, 1 = On)  3
+        //Delivery Status +CRLF     xxx                     5
+        //=========================================================
+        //Total 96 Bytes
 
 
-          string strstatusbinary = Convert.ToString(bacomportbuffer[92], 2).PadLeft(8, '0');
-          LineOut("STATUS BIT#1....:  76543210");
-          LineOut("       VALUE ...:  " + strstatusbinary);
-          OutputStatusBits(1, strstatusbinary);
+        string strstatusbinary = Convert.ToString(bacomportbuffer[92], 2).PadLeft(8, '0');
+        LineOut("STATUS BIT#1....:  76543210");
+        LineOut("       VALUE ...:  " + strstatusbinary);
+        OutputStatusBits(1, strstatusbinary);
 
-          strstatusbinary = Convert.ToString(bacomportbuffer[93], 2).PadLeft(8, '0');
-          LineOut("STATUS BIT#2....:  76543210");
-          LineOut("       VALUE ...:  " + strstatusbinary);
-          OutputStatusBits(2, strstatusbinary);
-
-
-
-        }
-
-        //build pcm command arrays to disconnect HOST
-        bytespcmtosend = StringToByteArray(Chr(255));
-
-        //send pcm command bytes
-        LineOut("SENDING PCM DISCONNECT COMMAND: ");
-        LineOutHexAndASCII(ByteArrayToString(bytespcmtosend));
-        serialPort1.Write(bytespcmtosend, 0, bytespcmtosend.GetUpperBound(0) + 1);
-
+        strstatusbinary = Convert.ToString(bacomportbuffer[93], 2).PadLeft(8, '0');
+        LineOut("STATUS BIT#2....:  76543210");
+        LineOut("       VALUE ...:  " + strstatusbinary);
+        OutputStatusBits(2, strstatusbinary);
 
       }
-      catch (Exception e1) {
-        LineOut("EXCEPTION IN DoPrintCommand()", e1);
-      }
 
 
-    End_GetDeliveryDataCommand:
 
-      LineOut("PROCESSING COMPLETE");
-      if (boolcomportopen) {
-        LineOut("CLOSING COM PORT");
-        CloseSerialPort(serialPort1);
-        boolcomportopen = false;
-      }
-      LineOut("============================");
+
+    //  //string stringfunction = "DoGetDeliveryDataCommand";
+
+    //  bool boolcomportopen = false;
+
+    //  byte[] bytestosend;
+    //  byte[] bytespcmtosend;
+
+    //  int inthundredths = 0;
+    //  int intthousandths = 0;
+
+    //  int intpcmcommanddelay = 5;               //milliseconds
+    //  int intmaxcommandtimeoutTenths = 0;       //HUNDREDTHS of seconds
+    //  int inttargetresponsecharcount = 0;
+    //  int intmaxretries = 0;
+    //  int intretrycount = 0;
+    //  int intretrytimeoutmilliseconds = 0;      //milliseconds
+
+    //  string stringout = "";
+
+    //  try {
+    //    //1. com port
+    //    //2. pcm command
+    //    //3. send command
+    //    //4. get response
+    //    //5. parse response
+    //    //6. close pcm
+
+    //    LineOut("*** GET E:COUNT DELIVERY DATA (T) ***");
+
+    //    LineOut("USING SERIAL PORT COM" + intcurrentcomport);
+    //    if (!IsCOMPortValid(intcurrentcomport)) {
+    //      stringout = "INVALID COM PORT! CHECK DEVICE MANAGER";
+    //      LineOut(stringout);
+    //      System.Windows.Forms.MessageBox.Show(stringout);
+    //      goto End_GetDeliveryDataCommand;
+    //    }
+
+    //    //setup com port and open it
+    //    if (boolcomportopen) {
+    //      //if the port is open, close it (possibly due to an error)
+    //      LineOut("COM PORT ALREADY OPEN, CLOSING");
+    //      CloseSerialPort(serialPort1);
+    //      boolcomportopen = false;
+    //    }
+    //    LineOut("INITIALIZING COM PORT");
+    //    boolcomportopen = OpenSerialPort(serialPort1);
+    //    if (!boolcomportopen) {
+    //      LineOut("ERROR INITIALIZING COM PORT!");
+    //      goto End_GetDeliveryDataCommand;
+    //    }
+
+
+    //    //Command Sequence:
+    //    //TX: 0x1F 0x02(Connect PCM - Host to PCM - EC1)
+    //    //TX: T
+    //    //RX: T(Verify T is echoed)
+    //    //RX: bytes … | (Verify response bytes +pipe char)
+    //    //TX: 0xFF(Disconnect PCM)
+
+    //    string stringtosend = "T";  //get delivery data
+
+    //    //build pcm and command arrays to connect HOST to REGISTER1 (0x1F 0x02) and then send V (0x56)
+    //    LineOut("BUILDING COMMAND BYTEARRAYS");
+    //    bytespcmtosend = StringToByteArray(Chr(31) + Chr(2));  //chr(31) = HEX 0x1F, chr(2) = HEX 0x02 
+    //    bytestosend = StringToByteArray(stringtosend);            // Built above
+
+    //    //set parameters for comamnd
+    //    LineOut("INITIALIZING COMMAND CONTROL PARAMETERS");
+    //    intmaxcommandtimeoutTenths = 200;    //2 sec = tenths = N * 10ms max to wait, this will vary from command to command
+    //    inttargetresponsecharcount = 98;     //T + 96 data + |, this will vary from command to command
+    //    intmaxretries = 1;                   //T cmd resent 1 time? 
+    //    intretrycount = 0;
+    //    intretrytimeoutmilliseconds = 0;     //delay between retries in ms, J command is only cmd retry that is valid, J requires *min* of 250 ms between retries
+
+    //  Retry_GetDeliveryDataCommand:
+
+    //    //clear RX buffer before sending
+    //    LineOut("CLEARING COM PORT BUFFER");
+    //    bacomportbuffer = new byte[] { };
+
+    //    //send pcm command bytes
+    //    LineOut("SENDING PCM CONNECT HOST-TO-REG1 COMMAND: ");
+    //    LineOutHexAndASCII(ByteArrayToString(bytespcmtosend));
+    //    serialPort1.Write(bytespcmtosend, 0, bytespcmtosend.GetUpperBound(0) + 1);
+
+    //    //wait X ms for PCM hardware to complete port switching
+    //    LineOut("WAITING FOR PCM TO SWITCH PORTS ..");
+    //    intthousandths = 0;
+    //    while (intthousandths < intpcmcommanddelay) {
+    //      //this is a kludge
+    //      intthousandths++;
+    //      System.Windows.Forms.Application.DoEvents();
+    //      System.Threading.Thread.Sleep(1);  //1 = 1ms
+    //    }
+
+    //    //send command bytes
+    //    LineOut("SENDING E:COUNT COMMAND: ");
+    //    LineOutHexAndASCII(ByteArrayToString(bytestosend));
+    //    serialPort1.Write(bytestosend, 0, bytestosend.GetUpperBound(0) + 1);
+
+    //    //wait for response
+    //    inthundredths = 0;
+    //    while ((inthundredths < intmaxcommandtimeoutTenths) && (bacomportbuffer.Length < inttargetresponsecharcount)) {
+    //      inthundredths++;
+    //      System.Windows.Forms.Application.DoEvents();
+    //      System.Threading.Thread.Sleep(10);  //10 = 10ms, 10ms is one-hundredth of a second ..
+    //      System.Windows.Forms.Application.DoEvents();
+    //    }
+
+    //    if (bacomportbuffer.Length < inttargetresponsecharcount) {
+    //      LineOut("RESPONSE TIMEOUT EXCEEDED " + intmaxcommandtimeoutTenths + " TENTHS OF A SECOND");
+    //      if (intretrycount < intmaxretries) {
+    //        intretrycount++;
+    //        System.Threading.Thread.Sleep(intretrytimeoutmilliseconds);
+    //        LineOut("RETRY # " + intretrycount + " OF " + intmaxretries + ", TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+    //        LineOut("PLEASE WAIT ..");
+    //        goto End_GetDeliveryDataCommand;
+    //      }
+    //      else {
+    //        if (intmaxretries == 0) {
+    //          LineOut("INVALID RESPONSE, TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+    //          LineOutHexAndASCII(ByteArrayToString(bacomportbuffer));
+    //        }
+    //        else {
+    //          LineOut("MAX OF " + intmaxretries + " RETRIES REACHED, TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+    //        }
+    //      }
+    //    }
+    //    else {
+    //      LineOut("TX TO E:COUNT: " + stringtosend.Length + " BYTES: " + stringtosend);
+
+    //      string stringresponse = ByteArrayToString(bacomportbuffer);
+    //      LineOut("RX FROM E:COUNT: " + stringresponse.Length + " BYTES");
+    //      LineOutHexAndASCII(stringresponse);
+
+    //      //NOTE, C# ARRAY INDICES ARE 0-BASED
+    //      LineOut("COMMAND ECHO               (0,1)    ....: " + stringresponse.Substring(0, 1));
+    //      LineOut("START TIME                 (1,12)   ....: " + stringresponse.Substring(1, 12));
+    //      LineOut("FINISH TIME                (13,12)  ....: " + stringresponse.Substring(13, 12));
+    //      LineOut("PRODUCT CODE               (25,4)   ....: " + stringresponse.Substring(25, 4));
+    //      LineOut("TRUCK #                    (29,6)   ....: " + stringresponse.Substring(29, 6));
+    //      LineOut("DRIVER #                   (35,6)   ....: " + stringresponse.Substring(35, 6));
+    //      LineOut("SALE #                     (41,8)   ....: " + stringresponse.Substring(41, 8));
+    //      LineOut("NET VOLUME                 (49,10)  ....: " + stringresponse.Substring(49, 10));
+    //      LineOut("GROSS VOLUME               (59,10)  ....: " + stringresponse.Substring(59, 10));
+    //      LineOut("NET FINISH TOTALIZER       (69,10)  ....: " + stringresponse.Substring(69, 10));
+    //      LineOut("GROSS FINISH TOTALIZER     (79,10)  ....: " + stringresponse.Substring(79, 10));
+    //      LineOut("COMPENSATOR STATE          (89,3)   ....: " + stringresponse.Substring(89, 3));
+    //      LineOut("DELIVERY STATUS            (92,5)   ....: " + stringresponse.Substring(92, 5));
+    //      LineOut("TERMINATING PIPE CHARACTER (97,1)   ....: " + stringresponse.Substring(97, 1));
+
+    //      //Field                     Format          Length(bytes)
+    //      //-------------------------------------------------------
+    //      //Start Time + CRLF         MMDDYYHHMM              12
+    //      //Finish Time +CRLF         MMDDYYHHMM              12
+    //      //Product Code +CRLF        00 - 99                 4
+    //      //Truck # + CRLF            0000-9999               6
+    //      //Driver # + CRLF           0000-9999               6
+    //      //Sale # + CRLF             000000-999999           8
+    //      //Net Volume + CRLF         00000000 - 99999999     10
+    //      //Gross Volume +CRLF        00000000 - 99999999     10
+    //      //Net Totalizer +CRLF       00000000 - 99999999     10
+    //      //Gross Totalizer +CRLF     00000000 - 99999999     10
+    //      //Compensator State +CRLF   0 - 1(0 = Off, 1 = On)  3
+    //      //Delivery Status +CRLF     xxx                     5
+    //      //=========================================================
+    //      //Total 96 Bytes
+
+
+    //      string strstatusbinary = Convert.ToString(bacomportbuffer[92], 2).PadLeft(8, '0');
+    //      LineOut("STATUS BIT#1....:  76543210");
+    //      LineOut("       VALUE ...:  " + strstatusbinary);
+    //      OutputStatusBits(1, strstatusbinary);
+
+    //      strstatusbinary = Convert.ToString(bacomportbuffer[93], 2).PadLeft(8, '0');
+    //      LineOut("STATUS BIT#2....:  76543210");
+    //      LineOut("       VALUE ...:  " + strstatusbinary);
+    //      OutputStatusBits(2, strstatusbinary);
+
+
+
+    //    }
+
+    //    //build pcm command arrays to disconnect HOST
+    //    bytespcmtosend = StringToByteArray(Chr(255));
+
+    //    //send pcm command bytes
+    //    LineOut("SENDING PCM DISCONNECT COMMAND: ");
+    //    LineOutHexAndASCII(ByteArrayToString(bytespcmtosend));
+    //    serialPort1.Write(bytespcmtosend, 0, bytespcmtosend.GetUpperBound(0) + 1);
+
+
+    //  }
+    //  catch (Exception e1) {
+    //    LineOut("EXCEPTION IN DoPrintCommand()", e1);
+    //  }
+
+
+    //End_GetDeliveryDataCommand:
+
+    //  LineOut("PROCESSING COMPLETE");
+    //  if (boolcomportopen) {
+    //    LineOut("CLOSING COM PORT");
+    //    CloseSerialPort(serialPort1);
+    //    boolcomportopen = false;
+    //  }
+    //  LineOut("============================");
+
+
     }//end- DoGetDeliveryDataCommand()
 
 
@@ -2769,5 +2836,173 @@ End_DoPassThroughPrintCommand:
       DoGetDeliveryDataCommand();
       EnableControls(true);
     }
+
+    private void Form1_Load(object sender, EventArgs e)
+    {
+
+    }
+
+    private void DoSendCommand(string stringtosend, int inttargetresponsecharcount, int intmaxcommandtimeoutTenths, int intmaxretries, string stringcallingcommand, out string stringresponse, out bool boolresponsevalid)
+    {
+      stringresponse = "";
+      boolresponsevalid = false;
+
+      bool boolcomportopen = false;
+
+      byte[] bytestosend;
+      byte[] bytespcmtosend;
+
+      int inthundredths = 0;
+      int intthousandths = 0;
+
+      int intpcmcommanddelay = 5;               //milliseconds
+      //int intmaxcommandtimeoutTenths = 0;       //HUNDREDTHS of seconds
+      //int inttargetresponsecharcount = 0;
+      //int intmaxretries = 0;
+      int intretrycount = 0;
+      int intretrytimeoutmilliseconds = 0;      //milliseconds
+
+      string stringout = "";
+
+      try {
+        //1. com port
+        //2. pcm command
+        //3. send command
+        //4. get response
+        //5. parse response
+        //6. close pcm
+
+        LineOut(stringcallingcommand);
+
+        LineOut("USING SERIAL PORT COM" + intcurrentcomport);
+        if (!IsCOMPortValid(intcurrentcomport)) {
+          stringout = "INVALID COM PORT! CHECK DEVICE MANAGER";
+          LineOut(stringout);
+          System.Windows.Forms.MessageBox.Show(stringout);
+          goto End_DoSendCommand;
+        }
+
+        //setup com port and open it
+        if (boolcomportopen) {
+          //if the port is open, close it (possibly due to an error)
+          LineOut("COM PORT ALREADY OPEN, CLOSING");
+          CloseSerialPort(serialPort1);
+          boolcomportopen = false;
+        }
+        LineOut("INITIALIZING COM PORT");
+        boolcomportopen = OpenSerialPort(serialPort1);
+        if (!boolcomportopen) {
+          LineOut("ERROR INITIALIZING COM PORT!");
+          goto End_DoSendCommand;
+        }
+
+
+        //build pcm and command arrays to connect HOST to REGISTER1 (0x1F 0x02) and then send V (0x56)
+        LineOut("BUILDING COMMAND BYTEARRAYS");
+        bytespcmtosend = StringToByteArray(Chr(31) + Chr(2));  //chr(31) = HEX 0x1F, chr(2) = HEX 0x02 
+        bytestosend = StringToByteArray(stringtosend);            // Built above
+
+        //set parameters for comamnd
+        LineOut("INITIALIZING COMMAND CONTROL PARAMETERS");
+        //intmaxcommandtimeoutTenths = 200;    //2 sec = tenths = N * 10ms max to wait, this will vary from command to command
+        //inttargetresponsecharcount = 98;     //T + 96 data + |, this will vary from command to command
+        //intmaxretries = 1;                   //T cmd resent 1 time? 
+        intretrycount = 0;
+        intretrytimeoutmilliseconds = 0;     //delay between retries in ms, J command is only cmd retry that is valid, J requires *min* of 250 ms between retries
+
+      Retry_DoSendCommand:
+
+        //clear RX buffer before sending
+        LineOut("CLEARING COM PORT BUFFER");
+        bacomportbuffer = new byte[] { };
+
+        //send pcm command bytes
+        LineOut("SENDING PCM CONNECT HOST-TO-REG1 COMMAND: ");
+        LineOutHexAndASCII(ByteArrayToString(bytespcmtosend));
+        serialPort1.Write(bytespcmtosend, 0, bytespcmtosend.GetUpperBound(0) + 1);
+
+        //wait X ms for PCM hardware to complete port switching
+        LineOut("WAITING FOR PCM TO SWITCH PORTS ..");
+        intthousandths = 0;
+        while (intthousandths < intpcmcommanddelay) {
+          //this is a kludge
+          intthousandths++;
+          System.Windows.Forms.Application.DoEvents();
+          System.Threading.Thread.Sleep(1);  //1 = 1ms
+        }
+
+        //send command bytes
+        LineOut("SENDING E:COUNT COMMAND: ");
+        LineOutHexAndASCII(ByteArrayToString(bytestosend));
+        serialPort1.Write(bytestosend, 0, bytestosend.GetUpperBound(0) + 1);
+
+        //wait for response
+        inthundredths = 0;
+        while ((inthundredths < intmaxcommandtimeoutTenths) && (bacomportbuffer.Length < inttargetresponsecharcount)) {
+          inthundredths++;
+          System.Windows.Forms.Application.DoEvents();
+          System.Threading.Thread.Sleep(10);  //10 = 10ms, 10ms is one-hundredth of a second ..
+          System.Windows.Forms.Application.DoEvents();
+        }
+
+        if (bacomportbuffer.Length < inttargetresponsecharcount) {
+          LineOut("RESPONSE TIMEOUT EXCEEDED " + intmaxcommandtimeoutTenths + " TENTHS OF A SECOND");
+          if (intretrycount < intmaxretries) {
+            intretrycount++;
+            System.Threading.Thread.Sleep(intretrytimeoutmilliseconds);
+            LineOut("RETRY # " + intretrycount + " OF " + intmaxretries + ", TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+            LineOut("PLEASE WAIT ..");
+            goto End_DoSendCommand;
+          }
+          else {
+            if (intmaxretries == 0) {
+              LineOut("INVALID RESPONSE, TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+              LineOutHexAndASCII(ByteArrayToString(bacomportbuffer));
+            }
+            else {
+              LineOut("MAX OF " + intmaxretries + " RETRIES REACHED, TOO FEW CHARS: " + bacomportbuffer.Length.ToString());
+            }
+          }
+        }
+        else {
+
+          boolresponsevalid = true;
+
+          LineOut("TX TO E:COUNT: " + stringtosend.Length + " BYTES: " + stringtosend);
+
+          stringresponse = ByteArrayToString(bacomportbuffer);
+          LineOut("RX FROM E:COUNT: " + stringresponse.Length + " BYTES");
+          LineOutHexAndASCII(stringresponse);
+
+        }
+
+        //build pcm command arrays to disconnect HOST
+        bytespcmtosend = StringToByteArray(Chr(255));
+
+        //send pcm command bytes
+        LineOut("SENDING PCM DISCONNECT COMMAND: ");
+        LineOutHexAndASCII(ByteArrayToString(bytespcmtosend));
+        serialPort1.Write(bytespcmtosend, 0, bytespcmtosend.GetUpperBound(0) + 1);
+
+
+      }
+      catch (Exception e1) {
+        LineOut("EXCEPTION IN DoSendCommand()", e1);
+      }
+
+
+    End_DoSendCommand:
+
+      LineOut("PROCESSING COMPLETE");
+      if (boolcomportopen) {
+        LineOut("CLOSING COM PORT");
+        CloseSerialPort(serialPort1);
+        boolcomportopen = false;
+      }
+      LineOut("============================");
+
+    }//end- DoSendCommand()
+
+
   }
 }
